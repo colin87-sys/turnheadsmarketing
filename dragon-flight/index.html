@@ -27,6 +27,7 @@
     .score { font-size: 40px; font-weight: 700; text-shadow: 0 0 18px rgba(80, 190, 255, 0.8), 0 2px 4px rgba(0,0,0,0.5); }
     .combo { font-size: 14px; letter-spacing: 2px; opacity: 0.8; }
     .combo.hot { color: #ffd86a; opacity: 1; text-shadow: 0 0 12px rgba(255, 200, 90, 0.8); }
+    .best { font-size: 11px; letter-spacing: 2px; opacity: 0.6; margin-top: 4px; }
 
     /* --- progress --- */
     .hud-progress { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 50%; height: 6px;
@@ -58,7 +59,7 @@
     /* --- full screens (start / game over / finish) --- */
     .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
       justify-content: center; text-align: center; background: rgba(10, 16, 34, 0.55); backdrop-filter: blur(3px); }
-    .screen.visible { display: flex; }
+    .screen.visible { display: flex; pointer-events: auto; }
     .screen h1 { font-size: 52px; letter-spacing: 8px; margin-bottom: 18px;
       text-shadow: 0 0 24px rgba(80, 190, 255, 0.9), 0 2px 6px rgba(0,0,0,0.6); }
     .screen h1.bad { color: #ff8a7a; text-shadow: 0 0 24px rgba(255, 90, 70, 0.7); }
@@ -68,6 +69,15 @@
     .screen .c { color: #7fe0ff; }
     .screen .action { margin-top: 26px; font-size: 18px; letter-spacing: 3px; color: #ffd86a; animation: pulse 1.6s ease-in-out infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    .newbest { color: #ffd86a; font-size: 20px; letter-spacing: 4px; margin-bottom: 10px;
+      text-shadow: 0 0 16px rgba(255, 200, 90, 0.9); animation: pulse 1.2s ease-in-out infinite; }
+    .challenge { color: #ff9a5a; font-size: 16px; letter-spacing: 2px; margin: 6px 0 10px; }
+    .challenge.won { color: #8aff9a; text-shadow: 0 0 14px rgba(110, 255, 140, 0.7); }
+    .share-row { display: flex; gap: 10px; margin-top: 22px; }
+    .share-row button { pointer-events: auto; cursor: pointer; font-family: inherit; font-size: 12px;
+      letter-spacing: 1.5px; color: #dff2ff; padding: 10px 16px; border-radius: 8px;
+      background: rgba(60, 150, 220, 0.25); border: 1px solid rgba(140, 210, 255, 0.6); }
+    .share-row button:hover { background: rgba(80, 180, 255, 0.45); }
   </style>
   <script type="importmap">
     { "imports": { "three": "./lib/three.module.js" } }

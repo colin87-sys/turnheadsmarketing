@@ -38,10 +38,49 @@ createRings(scene, layout);
 createObstacles(scene, layout);
 createPowerups(scene, layout);
 
+// A shared ?challenge=1234 link sets a friend's score to beat.
+const challengeParam = parseInt(new URLSearchParams(window.location.search).get('challenge'), 10);
+if (Number.isFinite(challengeParam) && challengeParam > 0) game.challengeScore = challengeParam;
+
 initInput();
-ui.init();
+ui.init({ onScreenshot: captureScreenshot });
 cameraCtl.init(camera, player);
 ui.showScreen('start');
+
+// Composite the rendered frame with the final stats into a downloadable PNG.
+function captureScreenshot() {
+  renderer.render(scene, camera); // fresh frame: the GL buffer isn't preserved between frames
+  const src = renderer.domElement;
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+
+  const s = c.width / 1280;
+  const top = c.height * 0.3;
+  g.fillStyle = 'rgba(8, 16, 34, 0.55)';
+  g.fillRect(0, top, c.width, 175 * s);
+  g.textAlign = 'center';
+  g.fillStyle = '#eaf4ff';
+  g.font = `700 ${28 * s}px sans-serif`;
+  g.fillText('DRAGON FLIGHT', c.width / 2, top + 42 * s);
+  g.fillStyle = '#ffd86a';
+  g.font = `700 ${64 * s}px sans-serif`;
+  g.fillText(`${Math.floor(game.score)} PTS`, c.width / 2, top + 110 * s);
+  g.fillStyle = '#9fd8f0';
+  g.font = `${20 * s}px sans-serif`;
+  g.fillText(
+    `${game.ringsCollected}/${game.ringsTotal} rings · best combo ${game.maxCombo.toFixed(2)}x · ${game.time.toFixed(1)}s`,
+    c.width / 2,
+    top + 150 * s
+  );
+
+  const a = document.createElement('a');
+  a.download = `dragon-flight-${Math.floor(game.score)}.png`;
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
 
 // --- Game flow ----------------------------------------------------------------
 function startGame() {
@@ -84,6 +123,12 @@ function tick() {
     ui.update(player);
 
     if (player.dist >= CONFIG.levelLength) {
+      // Speed bonus: points for every second under par (par = base-speed pace),
+      // so constant boosting is rewarded alongside ring combos.
+      const parTime = CONFIG.levelLength / CONFIG.baseSpeed;
+      game.timeBonus = Math.max(0, Math.round((parTime - game.time) * CONFIG.timeBonusPerSec));
+      game.score += game.timeBonus;
+      game.recordHighScore();
       game.state = 'finished';
       ui.showScreen('finished');
       sfx.finish();

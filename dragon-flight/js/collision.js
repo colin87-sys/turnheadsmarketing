@@ -71,6 +71,7 @@ function hit(damage, player, pushDir = 0) {
 
   if (game.health <= 0) {
     game.state = 'gameover';
+    game.recordHighScore();
     ui.showScreen('gameover');
     sfx.gameover();
   }
