@@ -1,4 +1,4 @@
-// Central tuning constants for Dragon Flight.
+// Central tuning constants for Angry Dragons.
 export const CONFIG = {
   // Flight lane bounds (the playable corridor)
   laneHalfWidth: 13,
@@ -24,11 +24,11 @@ export const CONFIG = {
   ringStamina: 20, // stamina restored per ring collected
   orbStamina: 15, // stamina restored per speed orb collected
 
-  // Health / collision
+  // Health / collision: floating obstacles chip health; canyon walls,
+  // the ground and crystal-gate faces are instantly fatal.
   healthMax: 100,
   obstacleDamage: 25,
-  wallDamage: 15,
-  invulnTime: 1.0, // seconds of damage immunity after a hit
+  invulnTime: 1.0, // seconds of damage immunity after a (non-fatal) hit
 
   // Scoring
   ringScore: 100,
@@ -36,15 +36,15 @@ export const CONFIG = {
   ringCenterRadius: 1.4, // distance from ring center that counts as "perfect"
   comboStep: 0.25,
   comboMax: 5,
-  timeBonusPerSec: 100, // finish-time bonus: points per second under par (par = base-speed pace)
+  distanceScore: 1, // points per unit flown — flying fast IS score
 
   // Rings
   ringRadius: 3.6,
-  ringCount: 32,
 
-  // Level
-  levelLength: 2600, // ~75s at base speed
-  orbCount: 6,
-  pathClearance: 5, // min gap between obstacles and the ring-to-ring flight corridor
-  seed: 1337, // fixed seed so every run uses the same course
+  // Endless generation
+  spawnAhead: 500, // keep the course built this far ahead of the dragon
+  cullBehind: 80, // tear down scenery this far behind
+  difficultyRamp: 1800, // distance for difficulty to reach 1.0; it keeps creeping after
+  pathClearance: 5, // min gap between obstacles and the flight corridor envelope
+  seed: 1337, // fixed seed: every run (and every challenger) flies the same canyon
 };

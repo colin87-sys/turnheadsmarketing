@@ -2,17 +2,16 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { game } from './gameState.js';
 import { initInput } from './input.js';
-import { generateLevel } from './level.js';
+import { createLevelGen } from './level.js';
 import { createEnvironment, updateEnvironment } from './environment.js';
 import { createDragon, updateDragon, resetDragon } from './dragon.js';
 import { player } from './player.js';
 import { cameraCtl } from './cameraController.js';
-import { createRings, updateRings, resetRings } from './rings.js';
-import { createObstacles, updateObstacles } from './obstacles.js';
-import { createPowerups, updatePowerups, resetPowerups } from './powerups.js';
+import { initRings, addRing, updateRings, resetRings } from './rings.js';
+import { initObstacles, addObstacle, updateObstacles, resetObstacles } from './obstacles.js';
+import { initPowerups, addOrb, updatePowerups, resetPowerups } from './powerups.js';
 import { updateCollision, resetCollision } from './collision.js';
 import { ui } from './ui.js';
-import { sfx } from './sfx.js';
 
 // --- Renderer / scene / camera ---------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,25 +30,36 @@ window.addEventListener('resize', () => {
 });
 
 // --- Build the world ---------------------------------------------------------
-const layout = generateLevel();
 createEnvironment(scene);
 createDragon(scene);
-createRings(scene, layout);
-createObstacles(scene, layout);
-createPowerups(scene, layout);
+initRings(scene);
+initObstacles(scene);
+initPowerups(scene);
+
+// Endless course: keep it generated ahead of the dragon, spawn what's new.
+let levelGen = createLevelGen();
+function spawnAhead() {
+  if (levelGen.generatedUntil >= player.dist + CONFIG.spawnAhead) return;
+  const chunk = levelGen.ensure(player.dist + CONFIG.spawnAhead);
+  chunk.rings.forEach(addRing);
+  chunk.obstacles.forEach(addObstacle);
+  chunk.orbs.forEach(addOrb);
+}
+spawnAhead();
 
 // A shared ?challenge=1234 link sets a friend's score to beat.
 const challengeParam = parseInt(new URLSearchParams(window.location.search).get('challenge'), 10);
 if (Number.isFinite(challengeParam) && challengeParam > 0) game.challengeScore = challengeParam;
 
 initInput();
-ui.init({ onScreenshot: captureScreenshot });
+ui.init({ getCard: makeShareCard });
 cameraCtl.init(camera, player);
 ui.showScreen('start');
 
-// Composite the rendered frame with the final stats into a downloadable PNG.
-function captureScreenshot() {
-  renderer.render(scene, camera); // fresh frame: the GL buffer isn't preserved between frames
+// The share card: the scene is frozen at the crash moment, so rendering on
+// demand captures "right before they died", stamped with their stats.
+function makeShareCard() {
+  renderer.render(scene, camera); // fresh frame: the GL buffer isn't preserved
   const src = renderer.domElement;
   const c = document.createElement('canvas');
   c.width = src.width;
@@ -64,22 +74,18 @@ function captureScreenshot() {
   g.textAlign = 'center';
   g.fillStyle = '#eaf4ff';
   g.font = `700 ${28 * s}px sans-serif`;
-  g.fillText('DRAGON FLIGHT', c.width / 2, top + 42 * s);
+  g.fillText('ANGRY DRAGONS', c.width / 2, top + 42 * s);
   g.fillStyle = '#ffd86a';
   g.font = `700 ${64 * s}px sans-serif`;
   g.fillText(`${Math.floor(game.score)} PTS`, c.width / 2, top + 110 * s);
   g.fillStyle = '#9fd8f0';
   g.font = `${20 * s}px sans-serif`;
   g.fillText(
-    `${game.ringsCollected}/${game.ringsTotal} rings · best combo ${game.maxCombo.toFixed(2)}x · ${game.time.toFixed(1)}s`,
+    `${Math.floor(game.distance)} m · ${game.ringsCollected} rings · best combo ${game.maxCombo.toFixed(2)}x`,
     c.width / 2,
     top + 150 * s
   );
-
-  const a = document.createElement('a');
-  a.download = `dragon-flight-${Math.floor(game.score)}.png`;
-  a.href = c.toDataURL('image/png');
-  a.click();
+  return c;
 }
 
 // --- Game flow ----------------------------------------------------------------
@@ -93,8 +99,11 @@ function restart() {
   player.reset();
   resetDragon(player);
   resetRings();
+  resetObstacles();
   resetPowerups();
   resetCollision();
+  levelGen = createLevelGen(); // same seed: every run flies the same canyon
+  spawnAhead();
   cameraCtl.init(camera, player);
   ui.hideScreen();
   game.state = 'playing';
@@ -102,7 +111,7 @@ function restart() {
 
 window.addEventListener('keydown', (e) => {
   if (game.state === 'ready' && (e.code === 'Enter' || e.code === 'Space')) startGame();
-  else if ((game.state === 'gameover' || game.state === 'finished') && e.code === 'KeyR') restart();
+  else if (game.state === 'gameover' && e.code === 'KeyR') restart();
 });
 
 // --- Main loop ------------------------------------------------------------------
@@ -117,29 +126,20 @@ function tick() {
   if (game.state === 'playing') {
     game.time += dt;
     player.update(dt);
+    game.distance = player.dist;
+    game.score += player.speed * dt * CONFIG.distanceScore; // flying fast is score
+    spawnAhead();
     updateCollision(dt, player);
     updateRings(dt, player, time);
     updatePowerups(dt, player, time);
     ui.update(player);
-
-    if (player.dist >= CONFIG.levelLength) {
-      // Speed bonus: points for every second under par (par = base-speed pace),
-      // so constant boosting is rewarded alongside ring combos.
-      const parTime = CONFIG.levelLength / CONFIG.baseSpeed;
-      game.timeBonus = Math.max(0, Math.round((parTime - game.time) * CONFIG.timeBonusPerSec));
-      game.score += game.timeBonus;
-      game.recordHighScore();
-      game.state = 'finished';
-      ui.showScreen('finished');
-      sfx.finish();
-    }
   }
 
-  // Cosmetic updates run in every state so menus stay alive.
+  // Cosmetic updates run in every state so menus (and the crash frame) stay alive.
   updateDragon(dt, player, time);
-  updateObstacles(dt, time);
+  updateObstacles(dt, time, player.dist);
   cameraCtl.update(dt, player);
-  updateEnvironment(dt, camera, time);
+  updateEnvironment(dt, camera, time, player.dist);
 
   renderer.render(scene, camera);
 }
