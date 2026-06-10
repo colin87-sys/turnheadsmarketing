@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { game } from './gameState.js';
-import { toggleMute, musicMuted } from './sfx.js';
+import { toggleMusicMute, toggleSfxMute, musicMuted, sfxMuted } from './sfx.js';
 
 let els = {};
 let handlers = {};
@@ -14,8 +14,10 @@ const ICONS = {
   x:    '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1 2h7l4.8 6.3L18.9 2z"/></svg>',
   tt:   '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 1 1-2.59-2.59c.27 0 .53.04.77.12V9.77a5.76 5.76 0 0 0-.77-.05 5.66 5.66 0 1 0 5.66 5.66V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.28 4.28 0 0 1-3.22-1.48z"/></svg>',
   link: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.6 13.4a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.6l-1.2 1.2"/><path d="M13.4 10.6a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.6l1.2-1.2"/></svg>',
-  mute: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
-  muted:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+  music:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+  musicOff: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><line x1="2" y1="3" x2="22" y2="21"/></svg>',
+  sfxOn:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+  sfxOff:   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
 };
 
 // Popup text IDs used across multiple popups
@@ -40,7 +42,10 @@ export const ui = {
         <div class="dist" id="dist">0 m</div>
         <div class="best" id="best"></div>
       </div>
-      <button class="mute-btn" id="mute-btn" title="Toggle music">${ICONS.mute}</button>
+      <div class="audio-btns">
+        <button class="mute-btn" id="music-btn" title="Toggle music">${ICONS.music}</button>
+        <button class="mute-btn" id="sfx-btn" title="Toggle sound effects">${ICONS.sfxOn}</button>
+      </div>
       <div class="popup" id="popup"></div>
       <div class="popup popup2" id="popup2"></div>
       <div class="vignette" id="vignette"></div>
@@ -62,14 +67,28 @@ export const ui = {
       blueFlash:    root.querySelector('#blue-flash'),
       feverOverlay: root.querySelector('#fever-overlay'),
       screen:       root.querySelector('#screen'),
-      muteBtn:      root.querySelector('#mute-btn'),
+      musicBtn:     root.querySelector('#music-btn'),
+      sfxBtn:       root.querySelector('#sfx-btn'),
     };
 
-    // Mute button
-    els.muteBtn.addEventListener('click', (e) => {
+    // Music / SFX mute buttons (muted state persists across sessions)
+    const paintMusicBtn = (muted) => {
+      els.musicBtn.innerHTML = muted ? ICONS.musicOff : ICONS.music;
+      els.musicBtn.classList.toggle('off', muted);
+    };
+    const paintSfxBtn = (muted) => {
+      els.sfxBtn.innerHTML = muted ? ICONS.sfxOff : ICONS.sfxOn;
+      els.sfxBtn.classList.toggle('off', muted);
+    };
+    paintMusicBtn(musicMuted);
+    paintSfxBtn(sfxMuted);
+    els.musicBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const muted = toggleMute();
-      els.muteBtn.innerHTML = muted ? ICONS.muted : ICONS.mute;
+      paintMusicBtn(toggleMusicMute());
+    });
+    els.sfxBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      paintSfxBtn(toggleSfxMute());
     });
   },
 

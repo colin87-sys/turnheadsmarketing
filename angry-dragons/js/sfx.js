@@ -1,11 +1,22 @@
 // Dragon Drift audio engine.
-// Procedural chiptune-synthwave music reacts to gameplay.
+// Procedural chiptune-pop music reacts to gameplay.
 // Layer unlock order: bass+melody always → arpeggio on boost →
 // high-lead on combo≥2 → percussion on combo≥3 → fever sparkle on surge.
 
 let ctx = null;
 let masterGain = null;
-export let musicMuted = false;
+let musicBus = null; // all music layers route here (independent mute)
+let sfxBus = null;   // all one-shot sound effects route here
+
+function loadMutePref(key) {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+function saveMutePref(key, value) {
+  try { localStorage.setItem(key, value ? '1' : '0'); } catch {}
+}
+
+export let musicMuted = loadMutePref('dragonDriftMusicMuted');
+export let sfxMuted = loadMutePref('dragonDriftSfxMuted');
 
 // iOS routes Web Audio through the "ambient" session by default, which the
 // hardware silent switch mutes. Ask for a "playback" session where supported.
@@ -20,6 +31,12 @@ function getCtx() {
       masterGain = ctx.createGain();
       masterGain.gain.value = 1;
       masterGain.connect(ctx.destination);
+      musicBus = ctx.createGain();
+      musicBus.gain.value = musicMuted ? 0 : 1;
+      musicBus.connect(masterGain);
+      sfxBus = ctx.createGain();
+      sfxBus.gain.value = sfxMuted ? 0 : 1;
+      sfxBus.connect(masterGain);
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
@@ -77,11 +94,20 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-export function toggleMute() {
+export function toggleMusicMute() {
   musicMuted = !musicMuted;
+  saveMutePref('dragonDriftMusicMuted', musicMuted);
   const a = getCtx();
-  if (a && masterGain) masterGain.gain.setTargetAtTime(musicMuted ? 0 : 1, a.currentTime, 0.08);
+  if (a && musicBus) musicBus.gain.setTargetAtTime(musicMuted ? 0 : 1, a.currentTime, 0.08);
   return musicMuted;
+}
+
+export function toggleSfxMute() {
+  sfxMuted = !sfxMuted;
+  saveMutePref('dragonDriftSfxMuted', sfxMuted);
+  const a = getCtx();
+  if (a && sfxBus) sfxBus.gain.setTargetAtTime(sfxMuted ? 0 : 1, a.currentTime, 0.08);
+  return sfxMuted;
 }
 
 // --- SFX helpers ---
@@ -96,7 +122,7 @@ function tone({ freq = 440, end = 0, dur = 0.2, type = 'sine', vol = 0.12, delay
   if (end) osc.frequency.exponentialRampToValueAtTime(Math.max(end, 1), t0 + dur);
   g.gain.setValueAtTime(vol, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g).connect(masterGain);
+  osc.connect(g).connect(sfxBus);
   osc.start(t0);
   osc.stop(t0 + dur + 0.05);
 }
@@ -138,62 +164,64 @@ export const sfx = {
 };
 
 // --- Music engine ---
-// C minor pentatonic: C, Eb, F, G, Bb (and octaves). Key frequencies (Hz):
+// Bright C major over the classic I–V–vi–IV pop loop (C–G–Am–F), twice per
+// 8-bar loop: bars 1-4 state the hook, bars 5-8 lift it an octave-ish for
+// the soaring "takeoff" feel. Note frequencies (Hz):
 const N = {
-  Bb2:116.54, C3:130.81, Eb3:155.56, F3:174.81, G3:196.00, Bb3:233.08,
-  C4:261.63, Eb4:311.13, F4:349.23, G4:392.00, Bb4:466.16,
-  C5:523.25, Eb5:622.25, F5:698.46, G5:783.99, Bb5:932.33, C6:1046.50,
+  F2:87.31, G2:98.00, A2:110.00,
+  C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+  C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+  C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
+  C6:1046.50, D6:1174.66, E6:1318.51,
 };
 
-const BPM = 138;
-const E8 = 60 / BPM / 2; // eighth-note duration = 0.2174s
+const BPM = 160;
+const E8 = 60 / BPM / 2; // eighth-note duration = 0.1875s
 // 8 bars × 4 beats × 2 eighths = 64 eighth notes total per loop
 
 // Each entry: [freq_hz, duration_in_eighth_notes]  (0 = rest)
 const MELODY_SEQ = [
-  // Bar 1 – rising hook
-  [N.C5,1],[0,1],[N.Eb5,1],[0,1],[N.G5,2],[0,2],
-  // Bar 2 – falling answer
-  [N.F5,1],[N.Eb5,1],[0,1],[N.C5,1],[N.Bb4,1],[0,2],[0,1],
-  // Bar 3 – build
-  [N.G4,1],[0,1],[N.Bb4,1],[N.C5,1],[N.Eb5,1],[N.F5,1],[N.G5,1],[0,1],
-  // Bar 4 – breathe & resolve
-  [N.G5,2],[N.Eb5,1],[0,1],[N.C5,2],[0,2],
-  // Bar 5 – soar high
-  [N.G5,1],[N.Bb5,1],[N.C6,2],[N.Bb5,1],[N.G5,1],[0,2],
-  // Bar 6 – cascade
-  [N.C6,1],[N.Bb5,1],[N.G5,1],[N.F5,1],[N.Eb5,1],[N.C5,1],[0,2],
-  // Bar 7 – drive
-  [N.Eb5,1],[N.F5,1],[N.G5,1],[0,1],[N.Bb5,2],[N.G5,2],
-  // Bar 8 – return home
-  [N.F5,1],[N.Eb5,1],[N.C5,1],[0,1],[N.C5,1],[0,1],[N.C5,2],
+  // Bar 1 (C) – anthem hook: do-mi-sol-do leap
+  [N.E5,1],[0,1],[N.G5,1],[0,1],[N.C6,2],[N.G5,2],
+  // Bar 2 (G) – falling answer
+  [N.A5,1],[N.G5,1],[0,1],[N.E5,1],[N.D5,2],[0,2],
+  // Bar 3 (Am) – hook echoed in minor
+  [N.C5,1],[0,1],[N.E5,1],[0,1],[N.A5,2],[N.G5,1],[N.E5,1],
+  // Bar 4 (F) – climb back home
+  [N.F5,1],[N.G5,1],[N.A5,2],[N.G5,2],[N.E5,1],[N.D5,1],
+  // Bar 5 (C) – second pass takes off
+  [N.G5,1],[0,1],[N.E5,1],[N.G5,1],[N.C6,2],[N.D6,2],
+  // Bar 6 (G) – peak and cascade
+  [N.E6,1],[N.D6,1],[N.C6,2],[N.B5,2],[N.G5,2],
+  // Bar 7 (Am) – soar again
+  [N.A5,1],[0,1],[N.C6,1],[0,1],[N.E6,2],[N.D6,1],[N.C6,1],
+  // Bar 8 (F) – swing up to relaunch the hook
+  [N.A5,1],[N.G5,1],[N.F5,1],[N.G5,1],[N.A5,2],[N.B5,2],
 ];
 
-const BASS_SEQ = [
-  [N.C3,2],[0,2],[N.C3,1],[N.Eb3,1],[0,2],          // bar 1 – Cm
-  [N.Bb2,2],[0,2],[N.Bb2,1],[0,1],[N.C3,2],           // bar 2 – Bb
-  [N.Eb3,2],[0,2],[N.Eb3,1],[N.F3,1],[0,2],           // bar 3 – Eb
-  [N.G3,2],[0,2],[N.G3,1],[0,1],[N.Eb3,2],            // bar 4 – G→Eb
-  [N.C3,1],[0,1],[N.C3,1],[0,1],[N.Eb3,1],[N.G3,1],[0,2], // bar 5 – pumping
-  [N.Bb2,1],[0,1],[N.Bb2,1],[0,1],[N.Bb2,1],[N.C3,1],[0,2], // bar 6
-  [N.Eb3,1],[0,1],[N.F3,1],[0,1],[N.Eb3,1],[N.F3,1],[N.G3,1],[0,1], // bar 7
-  [N.C3,2],[0,2],[N.C3,4],                             // bar 8 – home
-];
+// Driving octave-pump bass: root/octave eighths under each chord
+const BASS_SEQ = [];
+for (const root of [N.C3, N.G2, N.A2, N.F2, N.C3, N.G2, N.A2, N.F2]) {
+  for (let i = 0; i < 4; i++) BASS_SEQ.push([root, 1], [root * 2, 1]);
+}
 
-// High countermelody: silent bars 1-4, enters with the high section bars 5-8
+// High countermelody: silent bars 1-4, harmonizes the lift in bars 5-8
 const HIGH_SEQ = [
   [0,8],[0,8],[0,8],[0,8],
-  [N.Bb5,2],[N.C6,2],[N.Bb5,2],[N.G5,2],
-  [N.C6,2],[N.Bb5,2],[0,2],[N.G5,2],
-  [N.Bb5,2],[N.G5,2],[N.Bb5,2],[N.C6,2],
-  [N.Bb5,2],[N.G5,2],[N.F5,2],[0,2],
+  [N.G5,2],[N.E5,2],[N.G5,2],[N.C6,2],
+  [N.B5,2],[N.G5,2],[N.D5,2],[N.G5,2],
+  [N.A5,2],[N.E5,2],[N.C6,2],[N.E6,2],
+  [N.C6,2],[N.A5,2],[N.F5,2],[N.G5,2],
 ];
 
-// Arpeggio for boost: Cm chord up and back (16th notes = E8/2)
-const ARP = [N.C4, N.Eb4, N.G4, N.Bb4, N.C5, N.Bb4, N.G4, N.Eb4];
-
-// Fever sparkle: high arpeggio
-const FEVER_ARP = [N.C5, N.Eb5, N.G5, N.Bb5, N.C6, N.Bb5, N.G5, N.Eb5];
+// Boost arpeggios: one chord shape per bar (16th notes = E8/2), indexed
+// bar % 4 → C, G, Am, F. Fever sparkle plays the same shapes an octave up.
+const ARPS = [
+  [N.C4, N.E4, N.G4, N.C5, N.E5, N.C5, N.G4, N.E4], // C
+  [N.B3, N.D4, N.G4, N.B4, N.D5, N.B4, N.G4, N.D4], // G
+  [N.A3, N.C4, N.E4, N.A4, N.C5, N.A4, N.E4, N.C4], // Am
+  [N.A3, N.C4, N.F4, N.A4, N.C5, N.A4, N.F4, N.C4], // F
+];
 
 // --- Layer gain nodes ---
 let layers = {};       // keyed: bass, melody, high, arp, perc, fever
@@ -227,18 +255,20 @@ function buildEvents() {
   const e16 = E8 / 2;
   for (let bar = 0; bar < 8; bar++) {
     const barStart = bar * 8 * E8;
+    const arp = ARPS[bar % 4];                          // follow the chord
     for (let cycle = 0; cycle < 2; cycle++) {           // 2 × 8-note cycles per bar
       const cycleStart = barStart + cycle * 4 * E8;
-      for (let i = 0; i < ARP.length; i++) {
-        all.push({ t: cycleStart + i * e16, freq: ARP[i], durS: e16 * 0.65, layer: 'arp', osc: 'sawtooth', vol: 0.09 });
-        all.push({ t: cycleStart + i * e16, freq: FEVER_ARP[i], durS: e16 * 0.55, layer: 'fever', osc: 'triangle', vol: 0.08 });
+      for (let i = 0; i < arp.length; i++) {
+        all.push({ t: cycleStart + i * e16, freq: arp[i], durS: e16 * 0.65, layer: 'arp', osc: 'sawtooth', vol: 0.09 });
+        all.push({ t: cycleStart + i * e16, freq: arp[i] * 2, durS: e16 * 0.55, layer: 'fever', osc: 'triangle', vol: 0.08 });
       }
     }
-    // Percussion: kick/snare on beats, hat on every 8th
+    // Percussion: four-on-the-floor kick, backbeat snare, hat on every 8th
     const BEAT = 2 * E8;
     for (let beat = 0; beat < 4; beat++) {
       const bt = barStart + beat * BEAT;
-      all.push({ t: bt,      special: beat % 2 === 0 ? 'kick' : 'snare', layer: 'perc' });
+      all.push({ t: bt, special: 'kick', layer: 'perc' });
+      if (beat % 2 === 1) all.push({ t: bt, special: 'snare', layer: 'perc' });
       all.push({ t: bt,      special: 'hat', layer: 'perc' });
       all.push({ t: bt + E8, special: 'hat', layer: 'perc' });
     }
@@ -253,7 +283,7 @@ function makeLayer() {
   if (!a) return null;
   const g = a.createGain();
   g.gain.value = 0;
-  g.connect(masterGain);
+  g.connect(musicBus);
   return g;
 }
 
@@ -377,9 +407,9 @@ export const music = {
     layers.perc.gain.setTargetAtTime(game.combo >= 3 ? 1 : 0, now, FAST);
     layers.fever.gain.setTargetAtTime(game.feverActive ? 1 : 0, now, FAST);
 
-    // Slightly louder overall during fever
+    // Slightly louder music during fever
     if (!musicMuted) {
-      masterGain.gain.setTargetAtTime(game.feverActive ? 1.15 : 1.0, now, SLOW);
+      musicBus.gain.setTargetAtTime(game.feverActive ? 1.15 : 1.0, now, SLOW);
     }
   },
 };
