@@ -3,64 +3,60 @@ import { mulberry32, clamp } from './util.js';
 
 const lerp = (a, b, k) => a + (b - a) * k;
 
-// Endless course generator.
-//
-// The course is a chain of WAYPOINTS — most are rings, some are the holes in
-// crystal-gate walls — emitted lazily as the player advances. Every hop
-// between waypoints stays inside the steering envelope at boost speed, but:
-//   - swings always use a real fraction of that envelope and alternate
-//     direction, so the path weaves around the canyon instead of running
-//     straight;
-//   - difficulty rises with distance: tighter spacing, swings closer to the
-//     steering limit, smaller gate holes, more (and moving) obstacles. Past
-//     the ramp it keeps creeping — the canyon eventually wins. That's the run.
-// Obstacles between waypoints keep a clearance from the hop envelope (the
-// region between the two waypoint positions), so the racing line itself is
-// never blocked; gates ON the line are the navigation test.
+// Set-piece event types keyed by distance threshold.
+// main.js watches for these and builds the geometry.
+export const SET_PIECES = [
+  { dist: 420,  type: 'arch' },        // giant ice arch
+  { dist: 900,  type: 'tunnel' },      // crystal tunnel (dense close spires)
+  { dist: 1600, type: 'skychamber' },  // canyon opens wide, sun reveal
+  { dist: 2400, type: 'arch' },
+  { dist: 3200, type: 'tunnel' },
+];
+
 export function createLevelGen() {
   const rnd = mulberry32(CONFIG.seed);
   let prev = { dist: 0, x: 0, y: 8 };
   let swingX = 1;
   let swingY = 1;
   let untilGate = 3;
-  let untilOrb = 3;
+  let untilOrb = 2; // first orb comes faster
   let generatedUntil = 0;
 
   const difficulty = (d) => {
-    const t = d / CONFIG.difficultyRamp;
-    return t <= 1 ? t : 1 + (t - 1) * 0.25; // keeps creeping past 1.0, slowly
+    // First 300m: forced easy approach (tutorial)
+    if (d < 300) return 0;
+    const t = (d - 300) / CONFIG.difficultyRamp;
+    return t <= 1 ? t : 1 + (t - 1) * 0.25;
   };
 
   function nextWaypoint() {
     const t = difficulty(prev.dist);
     const tc = Math.min(t, 1);
-    const spacing = lerp(78, 48, tc) * (0.85 + rnd() * 0.3);
+    // First few hops are shorter so the player gets rewards quickly
+    const baseClose = prev.dist < 200 ? 42 : 78;
+    const spacing = lerp(baseClose, 48, tc) * (0.85 + rnd() * 0.3);
     const dist = prev.dist + spacing;
     const hopTime = spacing / CONFIG.boostSpeed;
-    // Swings approach (never exceed) the steering limit as difficulty rises.
-    const safety = Math.min(lerp(0.55, 0.9, t), 0.92);
+    const safety = Math.min(lerp(0.45, 0.9, t), 0.92); // gentler early
     const maxDx = CONFIG.lateralSpeed * hopTime * safety;
     const maxDy = CONFIG.verticalSpeed * hopTime * safety;
-    // Mostly alternate direction and always move at least 45% of the budget:
-    // the course weaves instead of drifting in a straight line.
+
     if (rnd() < 0.8) swingX *= -1;
     if (rnd() < 0.6) swingY *= -1;
-    let x = prev.x + swingX * (0.45 + rnd() * 0.55) * maxDx;
-    let y = prev.y + swingY * (0.45 + rnd() * 0.55) * maxDy;
-    if (x < -10 || x > 10) {
-      x = clamp(x, -10, 10);
-      swingX *= -1;
-    }
-    if (y < 5.5 || y > 19) {
-      y = clamp(y, 5.5, 19); // keep ring bottoms clear of the ground
-      swingY *= -1;
-    }
+
+    // First waypoint stays near centre so first ring is easy
+    const swingFraction = prev.dist < 80 ? 0.2 : (0.45 + rnd() * 0.55);
+    let x = prev.x + swingX * swingFraction * maxDx;
+    let y = prev.y + swingY * swingFraction * maxDy;
+
+    if (x < -10 || x > 10) { x = clamp(x, -10, 10); swingX *= -1; }
+    if (y < 5.5 || y > 19) { y = clamp(y, 5.5, 19); swingY *= -1; }
     return { dist, x, y };
   }
 
-  // Obstacles for the hop a->b, all kept clear of the hop envelope.
   function hopObstacles(a, b, out) {
     const t = difficulty(a.dist);
+    if (t <= 0) return; // tutorial zone: no obstacles
     const tc = Math.min(t, 1);
     const env = {
       minX: Math.min(a.x, b.x),
@@ -81,7 +77,6 @@ export function createLevelGen() {
       const roll = rnd();
 
       if (roll < 0.27) {
-        // Ice pillar beside the corridor; if it hugs a wall, use the open side.
         const r = 1.6 + rnd() * 1.4;
         const side = cx > 4 ? -1 : cx < -4 ? 1 : rnd() < 0.5 ? -1 : 1;
         const edge = side < 0 ? env.minX : env.maxX;
@@ -90,7 +85,6 @@ export function createLevelGen() {
           out.obstacles.push({ type: 'pillar', dist: d, x, r, h: 8 + rnd() * 13 });
         }
       } else if (roll < 0.55) {
-        // Static floating shard offset radially from the envelope.
         const r = 1.4 + rnd() * 1.2;
         const ang = rnd() * Math.PI * 2;
         const off = Math.hypot(halfW, halfH) + r + CLEAR + rnd() * 2.5;
@@ -102,8 +96,6 @@ export function createLevelGen() {
           out.obstacles.push({ type: 'shard', dist: d, x, y, r });
         }
       } else if (roll < 0.75) {
-        // Horizontal ice bar spanning the lane, above or below the corridor.
-        // Only fits where the hop is vertically tight.
         if (halfH * 2 < 3) {
           const r = 0.7 + rnd() * 0.4;
           const below = env.minY - (r + 4) - rnd() * 1.5;
@@ -115,8 +107,6 @@ export function createLevelGen() {
           }
         }
       } else if (t > 0.25) {
-        // Mover: oscillating shard whose whole sweep stays clear of the
-        // envelope — animated menace that punishes sloppy lines.
         const r = 1.3 + rnd() * 0.9;
         const amp = 1.5 + tc * 2;
         const speed = 1 + tc * 1.4 + rnd() * 0.5;
@@ -136,30 +126,36 @@ export function createLevelGen() {
     }
   }
 
-  // Generate forward until the course exists out to `target` distance.
-  // Returns the newly created entities for the scene modules to spawn.
   function ensure(target) {
-    const out = { rings: [], obstacles: [], orbs: [] };
+    const out = { rings: [], obstacles: [], orbs: [], setPieces: [] };
     while (prev.dist < target) {
       const wp = nextWaypoint();
       const t = difficulty(wp.dist);
       const tc = Math.min(t, 1);
       hopObstacles(prev, wp, out);
 
+      // Orbs: first one guaranteed early (dist ~120)
       untilOrb--;
       if (untilOrb <= 0) {
-        untilOrb = 4 + Math.floor(rnd() * 3);
+        untilOrb = prev.dist < 300 ? 3 : 4 + Math.floor(rnd() * 3);
         const ang = rnd() * Math.PI * 2;
         out.orbs.push({
           dist: (prev.dist + wp.dist) / 2,
-          x: clamp((prev.x + wp.x) / 2 + Math.cos(ang) * 3, -11, 11),
-          y: clamp((prev.y + wp.y) / 2 + Math.sin(ang) * 3, 4.5, 20),
+          x: clamp((prev.x + wp.x) / 2 + Math.cos(ang) * 2.5, -11, 11),
+          y: clamp((prev.y + wp.y) / 2 + Math.sin(ang) * 2.5, 4.5, 20),
         });
       }
 
+      // Set-piece events
+      for (const sp of SET_PIECES) {
+        if (prev.dist < sp.dist && wp.dist >= sp.dist) {
+          out.setPieces.push(sp);
+        }
+      }
+
+      // Gates: only after 420m (safely past the tutorial zone)
       untilGate--;
-      if (wp.dist > 260 && untilGate <= 0) {
-        // This waypoint is the HOLE in a crystal wall: gates force navigation.
+      if (wp.dist > 420 && t > 0 && untilGate <= 0) {
         untilGate = tc > 0.7 ? 2 + Math.floor(rnd() * 2) : 3 + Math.floor(rnd() * 3);
         out.obstacles.push({
           type: 'gate',
@@ -182,8 +178,6 @@ export function createLevelGen() {
   return {
     ensure,
     difficulty,
-    get generatedUntil() {
-      return generatedUntil;
-    },
+    get generatedUntil() { return generatedUntil; },
   };
 }

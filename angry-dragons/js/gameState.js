@@ -1,22 +1,22 @@
 import { CONFIG } from './config.js';
 
-function load(key) {
+function load(key, fallback) {
   try {
-    return Number(localStorage.getItem(key)) || 0;
-  } catch {
-    return 0; // private browsing / no storage
-  }
+    const v = Number(localStorage.getItem(key));
+    if (v) return v;
+    // Migrate from old Angry Dragons key on first rename
+    if (fallback) {
+      const fb = Number(localStorage.getItem(fallback));
+      if (fb) { localStorage.setItem(key, String(fb)); return fb; }
+    }
+    return 0;
+  } catch { return 0; }
 }
 
 function save(key, value) {
-  try {
-    localStorage.setItem(key, String(value));
-  } catch {
-    // storage unavailable; the run still counts, it just won't persist
-  }
+  try { localStorage.setItem(key, String(value)); } catch {}
 }
 
-// Shared mutable game state. Modules read/write this; main.js drives transitions.
 export const game = {
   state: 'ready', // ready | playing | gameover
   score: 0,
@@ -25,13 +25,21 @@ export const game = {
   health: CONFIG.healthMax,
   stamina: CONFIG.staminaMax,
   ringsCollected: 0,
+  perfectRings: 0,
+  nearMisses: 0,
+  speedOrbsCollected: 0,
+  maxSpeed: CONFIG.baseSpeed,
+  consecutiveRings: 0,
+  feverActive: false,
+  feverTimer: 0,
   distance: 0,
   time: 0,
-  highScore: load('angryDragonsHighScore'),
-  bestDistance: load('angryDragonsBestDist'),
+  deathFreezeTimer: 0,
+  highScore: load('dragonDriftHighScore', 'angryDragonsHighScore'),
+  bestDistance: load('dragonDriftBestDist', 'angryDragonsBestDist'),
   isNewHighScore: false,
   isNewBestDistance: false,
-  challengeScore: 0, // set from a shared ?challenge= link
+  challengeScore: 0,
 
   reset() {
     this.score = 0;
@@ -40,8 +48,16 @@ export const game = {
     this.health = CONFIG.healthMax;
     this.stamina = CONFIG.staminaMax;
     this.ringsCollected = 0;
+    this.perfectRings = 0;
+    this.nearMisses = 0;
+    this.speedOrbsCollected = 0;
+    this.maxSpeed = CONFIG.baseSpeed;
+    this.consecutiveRings = 0;
+    this.feverActive = false;
+    this.feverTimer = 0;
     this.distance = 0;
     this.time = 0;
+    this.deathFreezeTimer = 0;
     this.isNewHighScore = false;
     this.isNewBestDistance = false;
   },
@@ -50,12 +66,12 @@ export const game = {
     this.isNewHighScore = this.score > this.highScore && this.score > 0;
     if (this.isNewHighScore) {
       this.highScore = Math.floor(this.score);
-      save('angryDragonsHighScore', this.highScore);
+      save('dragonDriftHighScore', this.highScore);
     }
     this.isNewBestDistance = this.distance > this.bestDistance;
     if (this.isNewBestDistance) {
       this.bestDistance = Math.floor(this.distance);
-      save('angryDragonsBestDist', this.bestDistance);
+      save('dragonDriftBestDist', this.bestDistance);
     }
   },
 };
