@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dragon Flight</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1c2e5e; }
+    body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    canvas { display: block; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; color: #eaf4ff; }
+
+    /* --- bars --- */
+    .hud-top-left { position: absolute; top: 20px; left: 20px; width: 230px; }
+    .bar-label { font-size: 11px; letter-spacing: 2px; opacity: 0.85; margin: 6px 0 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+    .bar { height: 12px; background: rgba(8, 18, 38, 0.6); border: 1px solid rgba(160, 210, 255, 0.35); border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 5px; transition: width 0.12s linear; }
+    .bar-fill.health { background: linear-gradient(90deg, #ff5a5a, #ff9a5a); width: 100%; }
+    .bar-fill.stamina { background: linear-gradient(90deg, #3fb6ff, #7fe0ff); width: 100%; }
+    .bar-fill.stamina.depleted { background: #58606e; }
+    .hint { font-size: 11px; opacity: 0.6; margin-top: 8px; letter-spacing: 1px; }
+
+    /* --- score --- */
+    .hud-top-right { position: absolute; top: 20px; right: 24px; text-align: right; }
+    .score { font-size: 40px; font-weight: 700; text-shadow: 0 0 18px rgba(80, 190, 255, 0.8), 0 2px 4px rgba(0,0,0,0.5); }
+    .combo { font-size: 14px; letter-spacing: 2px; opacity: 0.8; }
+    .combo.hot { color: #ffd86a; opacity: 1; text-shadow: 0 0 12px rgba(255, 200, 90, 0.8); }
+
+    /* --- progress --- */
+    .hud-progress { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 50%; height: 6px;
+      background: rgba(8, 18, 38, 0.6); border: 1px solid rgba(160, 210, 255, 0.3); border-radius: 4px; overflow: hidden; }
+    .bar-fill.progress { background: linear-gradient(90deg, #3fb6ff, #aef); width: 0%; }
+
+    /* --- popups --- */
+    .popup { position: absolute; top: 32%; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 700;
+      letter-spacing: 2px; opacity: 0; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    .popup[data-color="cyan"] { color: #7fe0ff; }
+    .popup[data-color="gold"] { color: #ffd86a; }
+    .popup[data-color="red"] { color: #ff7a7a; }
+    .popup.popup-anim { animation: popup 0.9s ease-out forwards; }
+    @keyframes popup {
+      0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); }
+      15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+      70% { opacity: 1; transform: translate(-50%, -18px) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -34px) scale(1); }
+    }
+
+    /* --- damage vignette / orb flash --- */
+    .vignette { position: absolute; inset: 0; opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 40, 40, 0.55) 100%); }
+    .blue-flash { position: absolute; inset: 0; opacity: 0;
+      background: radial-gradient(ellipse at center, rgba(110, 200, 255, 0.22) 0%, transparent 70%); }
+    .flash-anim { animation: flash 0.45s ease-out forwards; }
+    @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+    /* --- full screens (start / game over / finish) --- */
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center; background: rgba(10, 16, 34, 0.55); backdrop-filter: blur(3px); }
+    .screen.visible { display: flex; }
+    .screen h1 { font-size: 52px; letter-spacing: 8px; margin-bottom: 18px;
+      text-shadow: 0 0 24px rgba(80, 190, 255, 0.9), 0 2px 6px rgba(0,0,0,0.6); }
+    .screen h1.bad { color: #ff8a7a; text-shadow: 0 0 24px rgba(255, 90, 70, 0.7); }
+    .screen h1.good { color: #9fe8ff; }
+    .screen .sub { font-size: 17px; opacity: 0.9; margin: 4px 0; }
+    .screen ul { list-style: none; margin: 18px 0; font-size: 15px; line-height: 2; opacity: 0.9; }
+    .screen .c { color: #7fe0ff; }
+    .screen .action { margin-top: 26px; font-size: 18px; letter-spacing: 3px; color: #ffd86a; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./lib/three.module.js" } }
+  </script>
+</head>
+<body>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
