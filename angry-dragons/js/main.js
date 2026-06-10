@@ -37,6 +37,10 @@ initRings(scene);
 initObstacles(scene);
 initPowerups(scene);
 
+// Set-piece meshes must exist before the first spawnAhead() call below,
+// since the first chunk can contain set-pieces.
+const setpieceMeshes = [];
+
 let levelGen = createLevelGen();
 function spawnAhead() {
   if (levelGen.generatedUntil >= player.dist + CONFIG.spawnAhead) return;
@@ -50,8 +54,6 @@ function spawnAhead() {
 spawnAhead();
 
 // --- Set-pieces (dramatic environment moments) ---
-const setpieceMeshes = [];
-
 function triggerSetPiece(sp) {
   if (sp.type === 'arch') buildArch(sp.dist);
   else if (sp.type === 'tunnel') buildTunnel(sp.dist);
