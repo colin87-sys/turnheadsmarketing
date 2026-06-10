@@ -5,9 +5,9 @@ import { cameraCtl } from './cameraController.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 
-// Hit rules: floating obstacles (pillars, shards, bars) chip 25 health with a
-// grace period; the canyon walls, the ground and crystal-gate faces are
-// instantly fatal — one clipped wing ends the flight.
+// Hit rules: floating obstacles (pillars, shards, bars) chip 25 health and
+// scraping the ground chips 15 (with a grace period and a bounce); the canyon
+// side walls and crystal-gate faces are instantly fatal.
 let invuln = 0;
 
 export function resetCollision() {
@@ -20,10 +20,16 @@ export function updateCollision(dt, player) {
   const p = player.position;
   const R = CONFIG.playerRadius;
 
-  // Canyon walls and the ground: fatal.
-  if (p.x > CONFIG.laneHalfWidth || p.x < -CONFIG.laneHalfWidth || p.y < CONFIG.laneMinY) {
+  // Canyon side walls: fatal.
+  if (p.x > CONFIG.laneHalfWidth || p.x < -CONFIG.laneHalfWidth) {
     crash();
     return;
+  }
+  // The ground is forgiving: bounce up and chip some health.
+  if (p.y < CONFIG.laneMinY) {
+    p.y = CONFIG.laneMinY;
+    player.velocity.y = Math.max(player.velocity.y, 6);
+    hit(player, 0, 0, CONFIG.groundDamage);
   }
 
   for (const c of colliders) {
@@ -58,10 +64,10 @@ export function updateCollision(dt, player) {
   }
 }
 
-function hit(player, pushX, pushY) {
+function hit(player, pushX, pushY, damage = CONFIG.obstacleDamage) {
   if (invuln > 0) return;
   invuln = CONFIG.invulnTime;
-  game.health = Math.max(0, game.health - CONFIG.obstacleDamage);
+  game.health = Math.max(0, game.health - damage);
   if (pushX) player.velocity.x += pushX * 10; // knock off the obstacle
   if (pushY) player.velocity.y += pushY * 8;
   cameraCtl.shake(0.8);

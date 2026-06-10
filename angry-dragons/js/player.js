@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { game } from './gameState.js';
-import { input } from './input.js';
+import { input, getAxes } from './input.js';
 import { damp } from './util.js';
 
 // Player flight model. The dragon always moves forward (-z); "dist" is the
@@ -34,11 +34,10 @@ export const player = {
   update(dt) {
     this.prevDist = this.dist;
 
-    // Smooth steering: ease velocity toward input direction.
-    const ix = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    const iy = (input.up ? 1 : 0) - (input.down ? 1 : 0);
-    this.velocity.x = damp(this.velocity.x, ix * CONFIG.lateralSpeed, CONFIG.moveAccel, dt);
-    this.velocity.y = damp(this.velocity.y, iy * CONFIG.verticalSpeed, CONFIG.moveAccel, dt);
+    // Smooth steering: ease velocity toward the (analog) input direction.
+    const axes = getAxes();
+    this.velocity.x = damp(this.velocity.x, axes.x * CONFIG.lateralSpeed, CONFIG.moveAccel, dt);
+    this.velocity.y = damp(this.velocity.y, axes.y * CONFIG.verticalSpeed, CONFIG.moveAccel, dt);
     this.position.x += this.velocity.x * dt;
     this.position.y += this.velocity.y * dt;
 

@@ -17,10 +17,11 @@ export function initRings(s) {
 }
 
 export function addRing(p) {
+  // Green: contrasts with the blue speed orbs AND the orange sunset sky.
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x39c5ff,
-    emissive: 0x1e90ff,
-    emissiveIntensity: 1.6,
+    color: 0x3dff8f,
+    emissive: 0x12c95e,
+    emissiveIntensity: 1.8,
     transparent: true,
     roughness: 0.3,
   });
@@ -43,7 +44,9 @@ export function updateRings(dt, player, time) {
 
       if (player.prevDist < r.dist && player.dist >= r.dist) {
         const d = Math.hypot(player.position.x - r.x, player.position.y - r.y);
-        if (d <= CONFIG.ringRadius - 0.6) collect(r, d);
+        // Generous: anywhere through the hoop (even a wing graze) counts;
+        // threading the center still pays the bonus.
+        if (d <= CONFIG.ringCatchRadius) collect(r, d);
         else miss(r);
       }
     } else if (r.collected && r.flash > 0) {
@@ -68,7 +71,7 @@ function collect(r, centerDist) {
   game.combo = Math.min(CONFIG.comboMax, game.combo + CONFIG.comboStep);
   game.maxCombo = Math.max(game.maxCombo, game.combo);
   game.stamina = Math.min(CONFIG.staminaMax, game.stamina + CONFIG.ringStamina);
-  ui.ringPopup(points, perfect);
+  ui.ringPopup(points, perfect); // popup + chime even on edge catches
   sfx.ring(game.combo); // sound effect hook
 }
 

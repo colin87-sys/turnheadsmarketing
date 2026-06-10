@@ -51,8 +51,8 @@ export function createLevelGen() {
       x = clamp(x, -10, 10);
       swingX *= -1;
     }
-    if (y < 4.5 || y > 19) {
-      y = clamp(y, 4.5, 19);
+    if (y < 5.5 || y > 19) {
+      y = clamp(y, 5.5, 19); // keep ring bottoms clear of the ground
       swingY *= -1;
     }
     return { dist, x, y };
@@ -153,7 +153,7 @@ export function createLevelGen() {
         out.orbs.push({
           dist: (prev.dist + wp.dist) / 2,
           x: clamp((prev.x + wp.x) / 2 + Math.cos(ang) * 3, -11, 11),
-          y: clamp((prev.y + wp.y) / 2 + Math.sin(ang) * 3, 3.5, 20),
+          y: clamp((prev.y + wp.y) / 2 + Math.sin(ang) * 3, 4.5, 20),
         });
       }
 
