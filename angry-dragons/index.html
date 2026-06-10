@@ -33,9 +33,12 @@
     .dist { font-size: 13px; letter-spacing: 2px; opacity: 0.75; margin-top: 3px; }
     .best { font-size: 11px; letter-spacing: 2px; opacity: 0.6; margin-top: 4px; }
 
-    /* --- mute button --- */
-    .mute-btn {
+    /* --- music / sfx mute buttons --- */
+    .audio-btns {
       position: absolute; top: 20px; right: 18px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .mute-btn {
       pointer-events: auto; cursor: pointer;
       width: 36px; height: 36px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -43,6 +46,7 @@
       border: 1px solid rgba(140, 210, 255, 0.4);
     }
     .mute-btn:hover { background: rgba(60, 120, 200, 0.5); }
+    .mute-btn.off { color: #5a7a96; opacity: 0.7; }
 
     /* --- popups --- */
     .popup  { position: absolute; top: 32%; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 700; letter-spacing: 2px; opacity: 0; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
@@ -130,7 +134,8 @@
       .best          { font-size: 9px; }
       .popup         { font-size: 20px; top: 24%; }
       .popup2        { font-size: 16px; top: 32%; }
-      .mute-btn      { top: 14px; right: 12px; width: 32px; height: 32px; }
+      .audio-btns    { top: 14px; right: 12px; gap: 6px; }
+      .mute-btn      { width: 32px; height: 32px; }
       .screen h1     { font-size: 34px; letter-spacing: 4px; padding: 0 10px; }
       .screen .sub   { font-size: 14px; padding: 0 16px; }
       .screen .sub.big{ font-size: 20px; }
