@@ -15,7 +15,7 @@ import { ui } from './ui.js';
 import { music, sfx } from './sfx.js';
 
 // --- Renderer / scene / camera ---
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -193,6 +193,7 @@ function restart() {
   ui.hideScreen();
   game.state = 'playing';
   boostWasActive = false;
+  time = 0;
 }
 
 window.addEventListener('keydown', (e) => {
@@ -202,13 +203,12 @@ window.addEventListener('keydown', (e) => {
 
 // --- Main loop ---
 const clock = new THREE.Clock();
-// Screenshot capture: delayed slightly after death to catch burst particles
-let screenshotPending = false;
-let screenshotTimer = 0;
+let time = 0; // accumulated game time for animations (matches original pattern)
 
 function tick() {
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
+  time += dt;
 
   if (game.state === 'playing') {
     game.time += dt;
@@ -217,8 +217,8 @@ function tick() {
     game.score += player.speed * dt * CONFIG.distanceScore;
     spawnAhead();
     updateCollision(dt, player);
-    updateRings(dt, player, clock.getElapsedTime());
-    updatePowerups(dt, player, clock.getElapsedTime());
+    updateRings(dt, player, time);
+    updatePowerups(dt, player, time);
     music.update(game, player);
     ui.update(player);
 
@@ -257,11 +257,10 @@ function tick() {
     }
   }
 
-  const t = clock.getElapsedTime();
-  updateDragon(dt, player, t);
-  updateObstacles(dt, t, player.dist);
+  updateDragon(dt, player, time);
+  updateObstacles(dt, time, player.dist);
   cameraCtl.update(dt, player);
-  updateEnvironment(dt, camera, t, player.dist);
+  updateEnvironment(dt, camera, time, player.dist);
 
   renderer.render(scene, camera);
 }
