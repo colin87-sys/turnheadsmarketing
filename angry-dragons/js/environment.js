@@ -1,17 +1,24 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
 import { mulberry32, makeGlowTexture } from './util.js';
+import { CONFIG } from './config.js';
 
 // Sunset sky dome, warm fog, icy canyon walls, snow particles and lighting.
+// Endless: the floor and sky follow the player; crystal wall instances are
+// recycled — anything that falls behind leapfrogs ahead with fresh jitter.
 let sky = null;
+let floor = null;
 let snow = null;
 let snowPositions = null;
 const SNOW_COUNT = 1200;
 const SNOW_BOX = { x: 80, y: 50, z: 160 };
 
-export function createEnvironment(scene) {
-  const L = CONFIG.levelLength;
+const WALL_WINDOW = 900; // wall band: 100 behind the player to 800 ahead
+let bigBand = null;
+let smallBand = null;
+let rnd = null;
 
+export function createEnvironment(scene) {
+  rnd = mulberry32(CONFIG.seed + 99);
   scene.fog = new THREE.Fog(0xd99a7a, 70, 380);
 
   // --- Sky dome: sunset gradient with a low sun ahead of the player.
@@ -54,70 +61,37 @@ export function createEnvironment(scene) {
   scene.add(sun, sun.target);
   scene.add(new THREE.HemisphereLight(0x9ab8ff, 0x32435e, 0.8));
 
-  // --- Snowy canyon floor.
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(160, L + 700),
+  // --- Snowy canyon floor: a plain plane that quietly follows the player.
+  floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(160, 1200),
     new THREE.MeshStandardMaterial({ color: 0xaccae0, roughness: 1 })
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, -L / 2);
   scene.add(floor);
 
-  // --- Canyon walls: instanced crystal spires along both sides.
-  const rnd = mulberry32(CONFIG.seed + 99);
-  const wallGeo = new THREE.ConeGeometry(1, 1, 5);
-  const wallMat = new THREE.MeshStandardMaterial({
+  // --- Canyon walls: recycled instanced crystal spires along both sides.
+  bigBand = makeBand(scene, 13, {
     color: 0x6fb7e8,
-    flatShading: true,
-    roughness: 0.35,
-    metalness: 0.1,
     emissive: 0x123a55,
     emissiveIntensity: 0.4,
+    place(side) {
+      return {
+        x: side * (17 + rnd() * 8),
+        h: 18 + rnd() * 32,
+        r: 3.5 + rnd() * 5,
+        tilt: side * (0.06 + rnd() * 0.1),
+      };
+    },
   });
-  const perSide = Math.ceil((L + 300) / 13);
-  const walls = new THREE.InstancedMesh(wallGeo, wallMat, perSide * 2);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const e = new THREE.Euler();
-  let idx = 0;
-  for (let side = -1; side <= 1; side += 2) {
-    for (let i = 0; i < perSide; i++) {
-      const z = 60 - i * 13 - rnd() * 6;
-      const x = side * (17 + rnd() * 8);
-      const h = 18 + rnd() * 32;
-      const r = 3.5 + rnd() * 5;
-      e.set((rnd() - 0.5) * 0.16, rnd() * Math.PI, side * (0.06 + rnd() * 0.1));
-      q.setFromEuler(e);
-      m.compose(new THREE.Vector3(x, h * 0.42, z), q, new THREE.Vector3(r, h, r));
-      walls.setMatrixAt(idx++, m);
-    }
-  }
-  scene.add(walls);
-
-  // --- Small foreground crystals near the lane edges.
-  const smallCount = Math.ceil(L / 30) * 2;
-  const small = new THREE.InstancedMesh(
-    wallGeo,
-    new THREE.MeshStandardMaterial({
-      color: 0x9fd8f0,
-      flatShading: true,
-      roughness: 0.3,
-      emissive: 0x1c4a66,
-      emissiveIntensity: 0.5,
-    }),
-    smallCount
-  );
-  for (let i = 0; i < smallCount; i++) {
-    const side = i % 2 === 0 ? -1 : 1;
-    const z = -((i / 2) * 30 + rnd() * 24);
-    const x = side * (13.5 + rnd() * 3);
-    const h = 2 + rnd() * 5;
-    e.set(0, rnd() * Math.PI, side * rnd() * 0.3);
-    q.setFromEuler(e);
-    m.compose(new THREE.Vector3(x, h * 0.4, z), q, new THREE.Vector3(h * 0.35, h, h * 0.35));
-    small.setMatrixAt(i, m);
-  }
-  scene.add(small);
+  smallBand = makeBand(scene, 30, {
+    color: 0x9fd8f0,
+    emissive: 0x1c4a66,
+    emissiveIntensity: 0.5,
+    place(side) {
+      const h = 2 + rnd() * 5;
+      return { x: side * (13.5 + rnd() * 3), h, r: h * 0.35, tilt: side * rnd() * 0.3 };
+    },
+  });
 
   // --- Snow particles, wrapped around the camera as it travels.
   snowPositions = new Float32Array(SNOW_COUNT * 3);
@@ -143,8 +117,66 @@ export function createEnvironment(scene) {
   scene.add(snow);
 }
 
-export function updateEnvironment(dt, camera, time) {
+// A pair-sided band of instanced crystal cones spread over WALL_WINDOW,
+// recycled forward as the player advances.
+function makeBand(scene, step, opts) {
+  const perSide = Math.ceil(WALL_WINDOW / step);
+  const mesh = new THREE.InstancedMesh(
+    new THREE.ConeGeometry(1, 1, 5),
+    new THREE.MeshStandardMaterial({
+      color: opts.color,
+      flatShading: true,
+      roughness: 0.32,
+      metalness: 0.1,
+      emissive: opts.emissive,
+      emissiveIntensity: opts.emissiveIntensity,
+    }),
+    perSide * 2
+  );
+  mesh.frustumCulled = false;
+  const data = [];
+  let idx = 0;
+  for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < perSide; i++) {
+      const d = { side, dist: i * step + rnd() * step - 100, ...opts.place(side) };
+      data.push(d);
+      writeMatrix(mesh, idx++, d);
+    }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+  return { mesh, data, place: opts.place };
+}
+
+const m4 = new THREE.Matrix4();
+const quat = new THREE.Quaternion();
+const eul = new THREE.Euler();
+function writeMatrix(mesh, i, d) {
+  eul.set(0, d.rotY ?? (d.rotY = rnd() * Math.PI), d.tilt);
+  quat.setFromEuler(eul);
+  m4.compose(new THREE.Vector3(d.x, d.h * 0.42, -d.dist), quat, new THREE.Vector3(d.r, d.h, d.r));
+  mesh.setMatrixAt(i, m4);
+}
+
+function recycleBand(band, playerDist) {
+  let changed = false;
+  for (let i = 0; i < band.data.length; i++) {
+    const d = band.data[i];
+    if (d.dist < playerDist - 100) {
+      const fresh = band.place(d.side);
+      Object.assign(d, fresh, { dist: d.dist + WALL_WINDOW, rotY: rnd() * Math.PI });
+      writeMatrix(band.mesh, i, d);
+      changed = true;
+    }
+  }
+  if (changed) band.mesh.instanceMatrix.needsUpdate = true;
+}
+
+export function updateEnvironment(dt, camera, time, playerDist) {
   sky.position.copy(camera.position);
+  floor.position.z = -playerDist;
+  recycleBand(bigBand, playerDist);
+  recycleBand(smallBand, playerDist);
 
   // Snowfall with gentle sway; wrap each flake into a box around the camera.
   const cx = camera.position.x;

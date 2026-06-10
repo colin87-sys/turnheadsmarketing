@@ -4,30 +4,39 @@ import { game } from './gameState.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 
-// Glowing score rings. A ring is judged the moment the player crosses its
-// plane: inside the ring scores (center = bonus), outside breaks the combo.
+// Glowing score rings, spawned ahead and culled behind the dragon. A ring is
+// judged the moment the player crosses its plane: inside scores (center =
+// bonus) and restores stamina; outside breaks the combo.
+let scene = null;
+let geo = null;
 const rings = [];
 
-export function createRings(scene, layout) {
-  const geo = new THREE.TorusGeometry(CONFIG.ringRadius, 0.35, 12, 40);
-  for (const p of layout.rings) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x39c5ff,
-      emissive: 0x1e90ff,
-      emissiveIntensity: 1.6,
-      transparent: true,
-      roughness: 0.3,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(p.x, p.y, -p.dist);
-    scene.add(mesh);
-    rings.push({ mesh, dist: p.dist, x: p.x, y: p.y, collected: false, missed: false, flash: 0 });
-  }
-  game.ringsTotal = rings.length;
+export function initRings(s) {
+  scene = s;
+  geo = new THREE.TorusGeometry(CONFIG.ringRadius, 0.35, 12, 40);
+}
+
+export function addRing(p) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x39c5ff,
+    emissive: 0x1e90ff,
+    emissiveIntensity: 1.6,
+    transparent: true,
+    roughness: 0.3,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(p.x, p.y, -p.dist);
+  scene.add(mesh);
+  rings.push({ mesh, dist: p.dist, x: p.x, y: p.y, collected: false, missed: false, flash: 0 });
 }
 
 export function updateRings(dt, player, time) {
-  for (const r of rings) {
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    if (r.dist < player.dist - CONFIG.cullBehind) {
+      removeAt(i);
+      continue;
+    }
     if (!r.collected && !r.missed) {
       r.mesh.rotation.z = time * 0.6;
       r.mesh.scale.setScalar(1 + Math.sin(time * 3 + r.dist) * 0.05);
@@ -69,14 +78,17 @@ function miss(r) {
   game.combo = 1;
 }
 
+function removeAt(i) {
+  const r = rings[i];
+  scene.remove(r.mesh);
+  r.mesh.material.dispose(); // geometry is shared, materials are per-ring
+  rings.splice(i, 1);
+}
+
+export function ringCount() {
+  return rings.length;
+}
+
 export function resetRings() {
-  for (const r of rings) {
-    r.collected = false;
-    r.missed = false;
-    r.flash = 0;
-    r.mesh.visible = true;
-    r.mesh.scale.setScalar(1);
-    r.mesh.material.opacity = 1;
-    r.mesh.material.emissiveIntensity = 1.6;
-  }
+  while (rings.length) removeAt(rings.length - 1);
 }
