@@ -161,6 +161,26 @@ export const sfx = {
   comboBreak() {
     tone({ freq: 440, end: 200, dur: 0.35, type: 'square', vol: 0.08 });
   },
+  gate() {
+    tone({ freq: 520, end: 1040, dur: 0.16, type: 'triangle', vol: 0.13 });
+    tone({ freq: 780, end: 1560, dur: 0.18, type: 'square', vol: 0.06, delay: 0.06 });
+  },
+  // Rising jingle when the combo crosses an intensity tier — higher tier,
+  // higher pitch.
+  comboUp(tier) {
+    const base = 600 + tier * 150;
+    tone({ freq: base, dur: 0.09, type: 'square', vol: 0.09 });
+    tone({ freq: base * 1.25, dur: 0.09, type: 'square', vol: 0.09, delay: 0.07 });
+    tone({ freq: base * 1.5, end: base * 2, dur: 0.16, type: 'square', vol: 0.1, delay: 0.14 });
+  },
+  milestone() {
+    [660, 880, 1320].forEach((f, i) =>
+      tone({ freq: f, dur: 0.14, type: 'triangle', vol: 0.1, delay: i * 0.07 }));
+  },
+  record() {
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) =>
+      tone({ freq: f, end: f * 1.2, dur: 0.22, type: 'square', vol: 0.09, delay: i * 0.08 }));
+  },
 };
 
 // --- Music engine ---
@@ -402,9 +422,10 @@ export const music = {
     const FAST = 0.15;
     const SLOW = 0.5;
 
+    // Layers come in earlier so the track builds with the very first combos
     layers.arp.gain.setTargetAtTime(player.boosting ? 1 : 0, now, FAST);
-    layers.high.gain.setTargetAtTime(game.combo >= 2 ? 1 : 0, now, SLOW);
-    layers.perc.gain.setTargetAtTime(game.combo >= 3 ? 1 : 0, now, FAST);
+    layers.high.gain.setTargetAtTime(game.combo >= 1.5 ? 1 : 0, now, SLOW);
+    layers.perc.gain.setTargetAtTime(game.combo >= 2 ? 1 : 0, now, FAST);
     layers.fever.gain.setTargetAtTime(game.feverActive ? 1 : 0, now, FAST);
 
     // Slightly louder music during fever

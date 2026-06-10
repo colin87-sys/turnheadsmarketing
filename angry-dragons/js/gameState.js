@@ -35,6 +35,8 @@ export const game = {
   distance: 0,
   time: 0,
   deathFreezeTimer: 0,
+  milestone: 0,        // last distance-milestone announced
+  recordBeaten: false, // live "NEW RECORD" shown this run
   highScore: load('dragonDriftHighScore', 'angryDragonsHighScore'),
   bestDistance: load('dragonDriftBestDist', 'angryDragonsBestDist'),
   isNewHighScore: false,
@@ -58,6 +60,8 @@ export const game = {
     this.distance = 0;
     this.time = 0;
     this.deathFreezeTimer = 0;
+    this.milestone = 0;
+    this.recordBeaten = false;
     this.isNewHighScore = false;
     this.isNewBestDistance = false;
   },

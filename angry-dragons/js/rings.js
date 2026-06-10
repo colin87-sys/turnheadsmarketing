@@ -3,7 +3,10 @@ import { CONFIG } from './config.js';
 import { game } from './gameState.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
+import { burst } from './particles.js';
+import { comboTier } from './util.js';
 
+const tmpV = new THREE.Vector3();
 let scene = null;
 let geo = null;
 const rings = [];
@@ -73,11 +76,20 @@ function collect(r, centerDist) {
   game.ringsCollected++;
   if (perfect) game.perfectRings++;
   game.consecutiveRings++;
+  const tierBefore = comboTier(game.combo);
   game.combo = Math.min(CONFIG.comboMax, game.combo + CONFIG.comboStep);
   game.maxCombo = Math.max(game.maxCombo, game.combo);
   game.stamina = Math.min(CONFIG.staminaMax, game.stamina + CONFIG.ringStamina);
   ui.ringPopup(points, perfect);
   sfx.ring(game.combo);
+
+  tmpV.set(r.x, r.y, -r.dist);
+  burst(tmpV, perfect ? 0xffd86a : 0x4dffa0, {
+    count: perfect ? 22 : 14,
+    speed: perfect ? 13 : 10,
+  });
+  const tierAfter = comboTier(game.combo);
+  if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
 
   // Check fever threshold
   if (!game.feverActive && game.consecutiveRings >= CONFIG.feverThreshold) {
@@ -85,6 +97,7 @@ function collect(r, centerDist) {
     game.feverTimer = CONFIG.feverDuration;
     ui.feverStart();
     sfx.feverStart();
+    burst(tmpV, 0xff88ff, { count: 30, speed: 16, size: 1.3 });
   }
 }
 

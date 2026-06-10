@@ -56,9 +56,14 @@ export const player = {
       this.velocity.y = Math.min(this.velocity.y, 0);
     }
 
-    this.boosting = input.boost && game.stamina > 0;
+    this.boosting = input.boost && (game.stamina > 0 || this.orbTimer > 0);
     if (this.boosting) {
-      game.stamina = Math.max(0, game.stamina - CONFIG.staminaDrain * dt);
+      // Orb surge = free boost; fever halves the burn. Combined with ring /
+      // window / orb refills, a skilled chain sustains boost indefinitely.
+      if (this.orbTimer <= 0) {
+        const drain = CONFIG.staminaDrain * (game.feverActive ? 0.5 : 1);
+        game.stamina = Math.max(0, game.stamina - drain * dt);
+      }
       this.regenDelay = CONFIG.staminaRegenDelay;
     } else {
       this.regenDelay -= dt;

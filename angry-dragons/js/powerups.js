@@ -4,6 +4,7 @@ import { game } from './gameState.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 import { makeGlowTexture } from './util.js';
+import { burst } from './particles.js';
 
 let scene = null;
 let geo = null;
@@ -53,6 +54,7 @@ export function updatePowerups(dt, player, time) {
         game.speedOrbsCollected++;
         ui.orbFlash();
         sfx.orb();
+        burst(o.mesh.position, 0x55ccff, { count: 20, speed: 14, size: 1.1 });
       }
     } else if (o.flash > 0) {
       o.flash -= dt * 3;

@@ -5,6 +5,8 @@ import { cameraCtl } from './cameraController.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 import { triggerDeathBurst } from './dragon.js';
+import { burst } from './particles.js';
+import { comboTier } from './util.js';
 
 // Near-miss cooldown: track per-collider so same obstacle can't spam
 const nearMissCooldowns = new WeakMap();
@@ -83,6 +85,10 @@ export function updateCollision(dt, player) {
           crash(player);
           return;
         }
+        if (!c.passed) {
+          c.passed = true;
+          threadGate(player);
+        }
         // Threading through gate close to the edge = near miss
         const marginX = c.gapW - Math.abs(p.x - c.gapX);
         const marginY = c.gapH - Math.abs(p.y - c.gapY);
@@ -92,6 +98,33 @@ export function updateCollision(dt, player) {
       }
     }
     if (game.state !== 'playing') return;
+  }
+}
+
+// Threading a window pays like a ring: score, combo, stamina, fever progress.
+function threadGate(player) {
+  const feverBonus = game.feverActive ? CONFIG.feverMultiplier : 1;
+  const points = Math.round(CONFIG.gateScore * game.combo * feverBonus);
+  game.score += points;
+  const tierBefore = comboTier(game.combo);
+  game.combo = Math.min(CONFIG.comboMax, game.combo + CONFIG.comboStep);
+  game.maxCombo = Math.max(game.maxCombo, game.combo);
+  game.consecutiveRings++;
+  game.stamina = Math.min(CONFIG.staminaMax, game.stamina + CONFIG.gateStamina);
+  if (game.feverActive) {
+    game.feverTimer = Math.min(game.feverTimer + 1.2, CONFIG.feverDuration);
+  }
+  ui.gatePopup(points);
+  sfx.gate();
+  burst(player.position, 0x7fe0ff, { count: 18, speed: 12 });
+  const tierAfter = comboTier(game.combo);
+  if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
+  if (!game.feverActive && game.consecutiveRings >= CONFIG.feverThreshold) {
+    game.feverActive = true;
+    game.feverTimer = CONFIG.feverDuration;
+    ui.feverStart();
+    sfx.feverStart();
+    burst(player.position, 0xff88ff, { count: 30, speed: 16, size: 1.3 });
   }
 }
 
