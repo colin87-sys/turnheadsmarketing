@@ -132,6 +132,26 @@ export function createLevelGen() {
       const wp = nextWaypoint();
       const t = difficulty(wp.dist);
       const tc = Math.min(t, 1);
+
+      // Gates: only after 420m (safely past the tutorial zone). The window is
+      // a fixed, generous size — difficulty instead shoves it further off the
+      // natural path, capped at ~92% of what the dragon can physically reach
+      // in this hop even at full boost, so it always stays fair. The waypoint
+      // itself moves to the window so the rest of the course flows from it.
+      untilGate--;
+      const isGate = wp.dist > 420 && t > 0 && untilGate <= 0;
+      if (isGate) {
+        untilGate = tc > 0.7 ? 2 + Math.floor(rnd() * 2) : 3 + Math.floor(rnd() * 3);
+        const hopTime = (wp.dist - prev.dist) / CONFIG.boostSpeed;
+        const reachX = CONFIG.lateralSpeed * hopTime * 0.92;
+        const reachY = CONFIG.verticalSpeed * hopTime * 0.92;
+        const push = Math.min(1, Math.min(t, 1.5) * (0.45 + rnd() * 0.45));
+        const dirX = Math.sign(wp.x - prev.x) || (rnd() < 0.5 ? -1 : 1);
+        const dirY = Math.sign(wp.y - prev.y) || (rnd() < 0.5 ? -1 : 1);
+        wp.x = clamp(wp.x + dirX * Math.max(0, reachX - Math.abs(wp.x - prev.x)) * push, -10, 10);
+        wp.y = clamp(wp.y + dirY * Math.max(0, reachY - Math.abs(wp.y - prev.y)) * push, 5.5, 19);
+      }
+
       hopObstacles(prev, wp, out);
 
       // Orbs: first one guaranteed early (dist ~120)
@@ -153,17 +173,14 @@ export function createLevelGen() {
         }
       }
 
-      // Gates: only after 420m (safely past the tutorial zone)
-      untilGate--;
-      if (wp.dist > 420 && t > 0 && untilGate <= 0) {
-        untilGate = tc > 0.7 ? 2 + Math.floor(rnd() * 2) : 3 + Math.floor(rnd() * 3);
+      if (isGate) {
         out.obstacles.push({
           type: 'gate',
           dist: wp.dist,
           gapX: wp.x,
           gapY: wp.y,
-          gapW: Math.max(lerp(5.2, 2.7, tc) - Math.max(0, t - 1) * 0.2, 2.2),
-          gapH: Math.max(lerp(4.8, 2.5, tc) - Math.max(0, t - 1) * 0.2, 2.1),
+          gapW: CONFIG.gateGapW,
+          gapH: CONFIG.gateGapH,
           thick: 1.5,
         });
       } else {

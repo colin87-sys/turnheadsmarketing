@@ -296,7 +296,7 @@ export function updateDragon(dt, player, time) {
   }
   ponyMeshes[0].position.copy(ponyPoints[0]);
 
-  // Cyan speed trail (orb/fast)
+  // Cyan speed trail (orb/fast); shifts pink during fever
   trailTimer -= dt;
   if (player.speedActive && trailTimer <= 0) {
     trailTimer = 0.015;
@@ -304,6 +304,7 @@ export function updateDragon(dt, player, time) {
     if (s) {
       s.visible = true;
       s.userData.life = 1;
+      s.material.color.setHex(player.feverActive ? 0xff9ad6 : 0xffffff);
       s.position.set(
         group.position.x + (Math.random() - 0.5) * 1.6,
         group.position.y + (Math.random() - 0.5) * 1.2,
@@ -322,7 +323,7 @@ export function updateDragon(dt, player, time) {
     }
   }
 
-  // Blue boost trail (only while boosting)
+  // Blue boost trail (only while boosting); shifts pink during fever
   boostTrailTimer -= dt;
   if (player.boosting && boostTrailTimer <= 0) {
     boostTrailTimer = 0.022;
@@ -330,6 +331,7 @@ export function updateDragon(dt, player, time) {
     if (s) {
       s.visible = true;
       s.userData.life = 1;
+      s.material.color.setHex(player.feverActive ? 0xff88cc : 0xffffff);
       s.position.set(
         group.position.x + (Math.random() - 0.5) * 0.8,
         group.position.y + (Math.random() - 0.5) * 0.8,

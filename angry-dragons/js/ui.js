@@ -1,6 +1,7 @@
 import { CONFIG } from './config.js';
 import { game } from './gameState.js';
 import { toggleMusicMute, toggleSfxMute, musicMuted, sfxMuted } from './sfx.js';
+import { comboTier } from './util.js';
 
 let els = {};
 let handlers = {};
@@ -22,6 +23,7 @@ const ICONS = {
 
 // Popup text IDs used across multiple popups
 let popupTimer = null;
+let lastCombo = 1;
 
 export const ui = {
   init(h = {}) {
@@ -34,11 +36,11 @@ export const ui = {
         <div class="bar"><div class="bar-fill health" id="health-fill"></div></div>
         <div class="bar-label">STAMINA</div>
         <div class="bar"><div class="bar-fill stamina" id="stamina-fill"></div></div>
-        <div class="hint">Hold SPACE to boost · rings refill stamina</div>
+        <div class="hint">Hold SPACE to boost · rings, windows &amp; orbs refill it</div>
       </div>
       <div class="hud-top-right">
         <div class="score" id="score">0</div>
-        <div class="combo" id="combo">1.00x COMBO</div>
+        <div class="combo" id="combo" data-tier="0"><span class="combo-x" id="combo-x">×1.00</span><span class="combo-word">COMBO</span></div>
         <div class="dist" id="dist">0 m</div>
         <div class="best" id="best"></div>
       </div>
@@ -59,6 +61,7 @@ export const ui = {
       stamina:      root.querySelector('#stamina-fill'),
       score:        root.querySelector('#score'),
       combo:        root.querySelector('#combo'),
+      comboX:       root.querySelector('#combo-x'),
       dist:         root.querySelector('#dist'),
       best:         root.querySelector('#best'),
       popup:        root.querySelector('#popup'),
@@ -98,12 +101,16 @@ export const ui = {
     els.stamina.classList.toggle('depleted', game.stamina <= 0.5);
     els.score.textContent = Math.floor(game.score);
 
-    // Score pulses while boosting
+    // Score pulses while boosting, glows pink during fever
     els.score.classList.toggle('boost-pulse', player.boosting);
+    els.score.classList.toggle('fever', game.feverActive);
 
-    els.combo.textContent = `${game.combo.toFixed(2)}x COMBO`;
-    els.combo.classList.toggle('hot',   game.combo >= 2);
-    els.combo.classList.toggle('fever', game.feverActive);
+    // Combo: intensity tiers escalate the styling; fever overrides everything
+    els.comboX.textContent = `×${game.combo.toFixed(2)}`;
+    els.combo.dataset.tier = game.feverActive ? 5 : comboTier(game.combo);
+    if (game.combo > lastCombo + 0.001) restartAnim(els.comboX, 'combo-pop');
+    lastCombo = game.combo;
+
     els.dist.textContent  = `${Math.floor(player.dist)} m`;
     els.best.textContent  = game.highScore > 0 ? `BEST ${game.highScore}` : '';
 
@@ -117,6 +124,18 @@ export const ui = {
 
   nearMissPopup(points) {
     this._popup2(`NEAR MISS +${points}`, 'orange');
+  },
+
+  gatePopup(points) {
+    this._popup(`THREADED +${points}`, 'cyan');
+  },
+
+  milestonePopup(metres) {
+    this._popup2(`${metres} m!`, 'gold');
+  },
+
+  recordPopup() {
+    this._popup('★ NEW RECORD ★', 'gold');
   },
 
   comboBreak() {
@@ -167,9 +186,9 @@ export const ui = {
         ${game.highScore ? `<p class="sub">Your best: <b>${game.highScore}</b> pts · ${game.bestDistance} m</p>` : ''}
         <ul>
           ${controls}
-          <li><span class="cg">Green rings</span> build your combo. Hit ${CONFIG.feverThreshold} in a row = <span class="cf">DRAGON SURGE</span></li>
-          <li><span class="c">Blue orbs</span> = free speed burst · squeeze past obstacles = near-miss bonus</li>
-          <li>Floating ice chips your health. <b>Side walls end your flight instantly.</b></li>
+          <li><span class="cg">Green rings</span> &amp; <span class="c">crystal windows</span> build your combo. Hit ${CONFIG.feverThreshold} in a row = <span class="cf">DRAGON SURGE</span></li>
+          <li><span class="c">Blue orbs</span> = free boost · chain rings, windows &amp; orbs to <b>boost forever</b></li>
+          <li>Squeeze past obstacles for near-miss bonuses. <b>Side walls end your flight instantly.</b></li>
         </ul>
         <p class="action">${touch ? 'Tap to take off' : 'Press ENTER to take off'}</p>`;
 

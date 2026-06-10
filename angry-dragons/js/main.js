@@ -10,6 +10,7 @@ import { cameraCtl } from './cameraController.js';
 import { initRings, addRing, updateRings, resetRings } from './rings.js';
 import { initObstacles, addObstacle, updateObstacles, resetObstacles } from './obstacles.js';
 import { initPowerups, addOrb, updatePowerups, resetPowerups } from './powerups.js';
+import { initParticles, updateParticles, resetParticles } from './particles.js';
 import { updateCollision, resetCollision } from './collision.js';
 import { ui } from './ui.js';
 import { music, sfx } from './sfx.js';
@@ -36,6 +37,7 @@ createDragon(scene);
 initRings(scene);
 initObstacles(scene);
 initPowerups(scene);
+initParticles(scene);
 
 // Set-piece meshes must exist before the first spawnAhead() call below,
 // since the first chunk can contain set-pieces.
@@ -184,6 +186,7 @@ function restart() {
   resetRings();
   resetObstacles();
   resetPowerups();
+  resetParticles();
   resetCollision();
   resetEnvironment();
   // Cull old set-pieces
@@ -231,6 +234,21 @@ function tick() {
     }
     boostWasActive = player.boosting;
 
+    // Distance milestones
+    const ms = Math.floor(player.dist / CONFIG.milestoneStep);
+    if (ms > game.milestone) {
+      game.milestone = ms;
+      ui.milestonePopup(ms * CONFIG.milestoneStep);
+      sfx.milestone();
+    }
+
+    // Live new-record celebration the moment the run passes the old best
+    if (!game.recordBeaten && game.highScore > 0 && game.score > game.highScore) {
+      game.recordBeaten = true;
+      ui.recordPopup();
+      sfx.record();
+    }
+
     // Fever timer
     if (game.feverActive) {
       game.feverTimer -= dt;
@@ -261,6 +279,7 @@ function tick() {
 
   const t = clock.getElapsedTime();
   updateDragon(dt, player, t);
+  updateParticles(dt);
   updateObstacles(dt, t, player.dist);
   cameraCtl.update(dt, player);
   updateEnvironment(dt, camera, t, player.dist);

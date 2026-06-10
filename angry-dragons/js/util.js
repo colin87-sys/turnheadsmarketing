@@ -20,6 +20,11 @@ export function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
+// Combo intensity tier (drives HUD styling and tier-up jingles).
+export function comboTier(c) {
+  return c >= 5 ? 4 : c >= 3.5 ? 3 : c >= 2.5 ? 2 : c >= 1.5 ? 1 : 0;
+}
+
 // Soft radial glow sprite texture, generated at runtime (no asset files).
 export function makeGlowTexture(rgb = '160,220,255') {
   const c = document.createElement('canvas');
