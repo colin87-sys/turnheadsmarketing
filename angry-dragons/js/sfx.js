@@ -7,6 +7,12 @@ let ctx = null;
 let masterGain = null;
 export let musicMuted = false;
 
+// iOS routes Web Audio through the "ambient" session by default, which the
+// hardware silent switch mutes. Ask for a "playback" session where supported.
+try {
+  if (navigator.audioSession) navigator.audioSession.type = 'playback';
+} catch { /* not supported */ }
+
 function getCtx() {
   try {
     if (!ctx) {
@@ -19,6 +25,30 @@ function getCtx() {
     return ctx;
   } catch { return null; }
 }
+
+// iOS/WebKit only unlocks audio from a *completed* gesture (touchend/click);
+// the game's pointerdown handlers alone are not enough. Resume the context on
+// any finished gesture, and kick output with a silent buffer for older iOS.
+function unlockAudio() {
+  const a = getCtx();
+  if (!a || a.state === 'running') return;
+  a.resume();
+  try {
+    const src = a.createBufferSource();
+    src.buffer = a.createBuffer(1, 1, 22050);
+    src.connect(a.destination);
+    src.start(0);
+  } catch { /* ignore */ }
+}
+for (const evt of ['touchend', 'pointerup', 'click', 'keydown']) {
+  window.addEventListener(evt, unlockAudio, { passive: true });
+}
+
+// iOS suspends the context when the tab is backgrounded or interrupted
+// (phone call, Siri); resume when the page becomes visible again.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && ctx && ctx.state !== 'running') ctx.resume();
+});
 
 export function toggleMute() {
   musicMuted = !musicMuted;
