@@ -47,7 +47,6 @@ function spawnAhead() {
   // Set-pieces
   chunk.setPieces && chunk.setPieces.forEach(sp => triggerSetPiece(sp));
 }
-spawnAhead();
 
 // --- Set-pieces (dramatic environment moments) ---
 const setpieceMeshes = [];
@@ -112,6 +111,9 @@ function buildTunnel(dist) {
   scene.add(group);
   setpieceMeshes.push({ object: group, dist: dist - 20 }); // cull start a little before
 }
+
+// Build the first stretch of course (now that set-piece helpers are defined).
+spawnAhead();
 
 // --- Challenge param ---
 const challengeParam = parseInt(new URLSearchParams(window.location.search).get('challenge'), 10);
