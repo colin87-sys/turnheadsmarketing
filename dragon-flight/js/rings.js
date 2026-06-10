@@ -58,6 +58,7 @@ function collect(r, centerDist) {
   game.ringsCollected++;
   game.combo = Math.min(CONFIG.comboMax, game.combo + CONFIG.comboStep);
   game.maxCombo = Math.max(game.maxCombo, game.combo);
+  game.stamina = Math.min(CONFIG.staminaMax, game.stamina + CONFIG.ringStamina);
   ui.ringPopup(points, perfect);
   sfx.ring(game.combo); // sound effect hook
 }

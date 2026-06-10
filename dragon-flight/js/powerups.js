@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
+import { game } from './gameState.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 import { makeGlowTexture } from './util.js';
@@ -49,6 +50,7 @@ export function updatePowerups(dt, player, time) {
         o.collected = true;
         o.flash = 1;
         player.orbTimer = CONFIG.orbDuration;
+        game.stamina = Math.min(CONFIG.staminaMax, game.stamina + CONFIG.orbStamina);
         ui.orbFlash();
         sfx.orb(); // sound effect hook
       }

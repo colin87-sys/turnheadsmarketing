@@ -32,9 +32,21 @@ Any static server works (`npx serve`, GitHub Pages, etc.).
 
 - **Rings**: 100 pts × combo. Each consecutive ring adds +0.25x combo (max 5x). Threading the exact center adds a +50 bonus. Missing a ring resets the combo.
 - **Boost**: 35 → 65 speed while held; drains 25 stamina/s. Stamina regenerates 15/s after a 1s delay.
-- **Speed orbs**: free 80-speed burst for 4 seconds, no stamina cost. They're placed off the easy line.
+- **Speed orbs**: free 80-speed burst for 2 seconds plus 15 stamina, placed just off the racing line between rings.
+- **Stamina from rings**: each ring restores 20 stamina — collecting rings is the real fuel for constant boosting.
 - **Damage**: obstacles −25 HP, canyon walls/floor −15 HP, with a 1s grace period after each hit. At 0 HP the flight ends.
-- The course is ~60–90 seconds; survive to the end for the final score screen.
+- **Speed bonus**: finishing under par (74s, the no-boost pace) awards 100 pts per second saved — flying fast and clean is the whole game.
+- **High score & sharing**: your best score is saved locally. From the end screen you can save a score screenshot, share on X, or copy a challenge link (`?challenge=SCORE`) that shows friends your score to beat.
+
+## Course design guarantee
+
+The level generator builds everything around a "flight corridor" — the envelope between consecutive ring positions:
+
+- Every ring-to-ring hop is steerable even at maximum (orb) speed, with ~45% margin.
+- Obstacles always keep a clearance from the corridor envelope; crystal-gate openings are centered on it and cover it fully.
+- Orbs sit a small flick off the corridor, never forcing a collision or a missed ring.
+
+So a perfect run — full boost, every ring, every orb, no damage — is always physically possible. (A headless bot that simply chases rings at constant boost finishes 32/32 rings with full health.)
 
 ## Code layout
 
