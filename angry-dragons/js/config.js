@@ -1,6 +1,6 @@
-// Central tuning constants for Angry Dragons.
+// Central tuning constants for Dragon Drift.
 export const CONFIG = {
-  // Flight lane bounds (the playable corridor)
+  // Flight lane bounds
   laneHalfWidth: 13,
   laneMinY: 2.5,
   laneMaxY: 22,
@@ -10,43 +10,59 @@ export const CONFIG = {
   baseSpeed: 35,
   boostSpeed: 65,
   orbSpeed: 80,
-  orbDuration: 2, // seconds of speed burst per orb
-  speedEase: 3, // how fast forward speed eases toward its target
+  orbDuration: 2,
+  speedEase: 3,
   lateralSpeed: 24,
   verticalSpeed: 18,
-  moveAccel: 6, // easing rate for lateral/vertical velocity
+  moveAccel: 6,
+
+  // Time-based speed ramp (separate from distance difficulty)
+  speedRampStart: 20,     // seconds before ramp begins
+  speedRampEnd: 90,       // seconds to reach max ramp
+  speedRampMax: 1.35,     // max multiplier on base/boost speed
 
   // Stamina system
   staminaMax: 100,
-  staminaDrain: 25, // per second while boosting
-  staminaRegen: 15, // per second
-  staminaRegenDelay: 1, // seconds after boosting before regen starts
-  ringStamina: 20, // stamina restored per ring collected
-  orbStamina: 15, // stamina restored per speed orb collected
+  staminaDrain: 25,
+  staminaRegen: 15,
+  staminaRegenDelay: 1,
+  ringStamina: 20,
+  orbStamina: 15,
 
-  // Health / collision: floating obstacles chip health, the ground bounces
-  // and chips a little; canyon side walls and crystal-gate faces are fatal.
+  // Health / collision
   healthMax: 100,
   obstacleDamage: 25,
   groundDamage: 15,
-  invulnTime: 1.0, // seconds of damage immunity after a (non-fatal) hit
+  invulnTime: 1.0,
 
   // Scoring
   ringScore: 100,
   ringCenterBonus: 50,
-  ringCenterRadius: 1.4, // distance from ring center that counts as "perfect"
+  ringCenterRadius: 1.4,
   comboStep: 0.25,
   comboMax: 5,
-  distanceScore: 1, // points per unit flown — flying fast IS score
+  distanceScore: 1,
+
+  // Near-miss system
+  nearMissBonus: 25,
+  nearMissCooldown: 1.8,  // seconds before same obstacle can award near-miss again
+
+  // Fever / Dragon Surge
+  feverThreshold: 8,      // consecutive rings to trigger fever
+  feverDuration: 8,       // seconds of surge state
+  feverMultiplier: 2.0,   // score multiplier during surge
 
   // Rings
   ringRadius: 3.6,
-  ringCatchRadius: 3.9, // generous: anywhere through (or grazing) the hoop counts
+  ringCatchRadius: 3.9,
 
   // Endless generation
-  spawnAhead: 500, // keep the course built this far ahead of the dragon
-  cullBehind: 80, // tear down scenery this far behind
-  difficultyRamp: 1800, // distance for difficulty to reach 1.0; it keeps creeping after
-  pathClearance: 5, // min gap between obstacles and the flight corridor envelope
-  seed: 1337, // fixed seed: every run (and every challenger) flies the same canyon
+  spawnAhead: 500,
+  cullBehind: 80,
+  difficultyRamp: 1800,
+  pathClearance: 5,
+  seed: 1337,
+
+  // Death freeze-frame
+  deathFreezeDuration: 0.45, // seconds of freeze before game-over screen
 };
