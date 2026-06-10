@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { game } from './gameState.js';
-import { initInput } from './input.js';
+import { initInput, initTouch } from './input.js';
 import { createLevelGen } from './level.js';
-import { createEnvironment, updateEnvironment } from './environment.js';
+import { createEnvironment, updateEnvironment, resetEnvironment } from './environment.js';
 import { createDragon, updateDragon, resetDragon } from './dragon.js';
 import { player } from './player.js';
 import { cameraCtl } from './cameraController.js';
@@ -52,9 +52,15 @@ const challengeParam = parseInt(new URLSearchParams(window.location.search).get(
 if (Number.isFinite(challengeParam) && challengeParam > 0) game.challengeScore = challengeParam;
 
 initInput();
-ui.init({ getCard: makeShareCard });
+initTouch(renderer.domElement); // drag = steer, second finger = boost
+ui.init({ getCard: makeShareCard, onRestart: restart });
 cameraCtl.init(camera, player);
 ui.showScreen('start');
+
+// Tap (or click) anywhere to take off from the start screen.
+window.addEventListener('pointerdown', () => {
+  if (game.state === 'ready') startGame();
+});
 
 // The share card: the scene is frozen at the crash moment, so rendering on
 // demand captures "right before they died", stamped with their stats.
@@ -102,6 +108,7 @@ function restart() {
   resetObstacles();
   resetPowerups();
   resetCollision();
+  resetEnvironment(); // bring the canyon crystals back to the start line
   levelGen = createLevelGen(); // same seed: every run flies the same canyon
   spawnAhead();
   cameraCtl.init(camera, player);

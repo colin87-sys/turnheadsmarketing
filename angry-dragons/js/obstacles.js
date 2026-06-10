@@ -65,8 +65,9 @@ export function addObstacle(o) {
   entries.push(e);
 }
 
-// A translucent crystal wall spanning the lane with a rectangular opening,
-// outlined by a glowing ring. The wall itself is fatal — thread the hole.
+// A translucent crystal wall spanning the lane with a rectangular opening.
+// The hole is outlined with a RECTANGULAR glow frame — deliberately not a
+// circle, so it can't be mistaken for a score ring. The wall itself is fatal.
 function buildGate(o) {
   const group = new THREE.Group();
   const T = 1.6; // wall thickness
@@ -88,12 +89,17 @@ function buildGate(o) {
   panel(right - left, TOP - top, o.gapX, (top + TOP) / 2); // above gap
   panel(right - left, bottom, o.gapX, bottom / 2); // below gap
 
-  const frame = new THREE.Mesh(
-    new THREE.TorusGeometry(Math.max(o.gapW, o.gapH) * 1.05, 0.18, 8, 28),
-    mats.frame
-  );
-  frame.position.set(o.gapX, o.gapY, 0);
-  group.add(frame);
+  const edge = (w, h, cx, cy) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.35), mats.frame);
+    mesh.position.set(cx, cy, 0);
+    group.add(mesh);
+  };
+  const W = o.gapW * 2;
+  const H = o.gapH * 2;
+  edge(W + 0.6, 0.28, o.gapX, top + 0.14); // top edge
+  edge(W + 0.6, 0.28, o.gapX, bottom - 0.14); // bottom edge
+  edge(0.28, H + 0.6, left - 0.14, o.gapY); // left edge
+  edge(0.28, H + 0.6, right + 0.14, o.gapY); // right edge
 
   group.position.z = -o.dist;
   return group;

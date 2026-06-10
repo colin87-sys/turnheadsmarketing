@@ -5,7 +5,12 @@ import { game } from './gameState.js';
 // popups, damage vignette, the start/game-over screens, and the simplified
 // share flow (Screenshot + Share & Challenge with IG / X / TikTok / link).
 let els = {};
-let handlers = {}; // { getCard } supplied by main.js — returns a canvas share card
+let handlers = {}; // { getCard, onRestart } supplied by main.js
+
+// Coarse-pointer devices get touch wording and a tap-first menu.
+const isTouch = () =>
+  (globalThis.matchMedia && matchMedia('(pointer: coarse)').matches) ||
+  'ontouchstart' in globalThis;
 
 const ICONS = {
   ig: '<svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="currentColor"/></svg>',
@@ -65,7 +70,7 @@ export const ui = {
   },
 
   ringPopup(points, perfect) {
-    this._popup(perfect ? `+${points} PERFECT!` : `+${points}`, perfect ? 'gold' : 'cyan');
+    this._popup(perfect ? `+${points} PERFECT!` : `+${points}`, perfect ? 'gold' : 'green');
   },
 
   comboBreak() {
@@ -93,19 +98,26 @@ export const ui = {
     let html = '';
 
     if (type === 'start') {
+      const touch = isTouch();
+      const controls = touch
+        ? `
+          <li><b>Drag</b> anywhere — steer</li>
+          <li><b>Hold a second finger</b> — boost (drains stamina; rings refill it)</li>`
+        : `
+          <li><b>W/A/S/D</b> or <b>Arrows</b> — steer</li>
+          <li><b>Hold SPACE</b> — boost (drains stamina; rings refill it)</li>`;
       html = `
         <h1>ANGRY DRAGONS</h1>
         ${game.challengeScore ? `<p class="challenge">CHALLENGE — beat ${game.challengeScore} points!</p>` : ''}
         <p class="sub">The canyon never ends. It only gets meaner. Fly as far as you can.</p>
         ${game.highScore ? `<p class="sub">Your best: <b>${game.highScore}</b> pts · ${game.bestDistance} m</p>` : ''}
         <ul>
-          <li><b>W/A/S/D</b> or <b>Arrows</b> — steer</li>
-          <li><b>Hold SPACE</b> — boost (drains stamina; rings refill it)</li>
-          <li><span class="c">Rings</span> build your combo. <span class="c">Blue orbs</span> = free speed surge</li>
-          <li>Floating ice chips your health. <b>Walls end your flight instantly.</b></li>
-          <li>Thread the glowing holes in the crystal walls</li>
+          ${controls}
+          <li><span class="cg">Green rings</span> build your combo. <span class="c">Blue orbs</span> = free speed surge</li>
+          <li>Floating ice chips your health. <b>Side walls end your flight instantly.</b></li>
+          <li>Thread the glowing square holes in the crystal walls</li>
         </ul>
-        <p class="action">Press ENTER to take off</p>`;
+        <p class="action">${touch ? 'Tap to take off' : 'Press ENTER to take off'}</p>`;
     } else if (type === 'gameover') {
       const gap = game.highScore > score ? game.highScore - score : 0;
       html = `
@@ -116,6 +128,7 @@ export const ui = {
         <p class="sub">Rings: ${game.ringsCollected} &nbsp;·&nbsp; Best combo: ${game.maxCombo.toFixed(2)}x &nbsp;·&nbsp; ${game.time.toFixed(1)}s</p>
         ${gap > 0 ? `<p class="sub gap">Only <b>${gap}</b> points from your best — go again!</p>` : ''}
         ${challengeResult(score)}
+        <button id="btn-again" class="btn-primary">FLY AGAIN</button>
         <div class="share-row">
           <button id="btn-shot">SCREENSHOT</button>
           <button id="btn-share">SHARE &amp; CHALLENGE YOUR FRIENDS</button>
@@ -127,7 +140,7 @@ export const ui = {
           <button id="share-link" title="Copy challenge link">${ICONS.link}</button>
         </div>
         <p class="share-hint" id="share-hint"></p>
-        <p class="action">Press R to fly again</p>`;
+        ${isTouch() ? '' : '<p class="action">or press R</p>'}`;
     }
 
     els.screen.innerHTML = html;
@@ -208,6 +221,8 @@ function wireShareButtons(score, dist) {
     window.open(site, '_blank', 'noopener');
   };
 
+  const again = els.screen.querySelector('#btn-again');
+  if (again) again.onclick = () => handlers.onRestart && handlers.onRestart();
   shot.onclick = () => {
     if (downloadCard()) setHint('Screenshot saved!');
   };

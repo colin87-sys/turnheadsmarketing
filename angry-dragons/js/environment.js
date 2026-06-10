@@ -138,14 +138,14 @@ function makeBand(scene, step, opts) {
   let idx = 0;
   for (let side = -1; side <= 1; side += 2) {
     for (let i = 0; i < perSide; i++) {
-      const d = { side, dist: i * step + rnd() * step - 100, ...opts.place(side) };
+      const d = { side, slot: i, dist: i * step + rnd() * step - 100, ...opts.place(side) };
       data.push(d);
       writeMatrix(mesh, idx++, d);
     }
   }
   mesh.instanceMatrix.needsUpdate = true;
   scene.add(mesh);
-  return { mesh, data, place: opts.place };
+  return { mesh, data, step, place: opts.place };
 }
 
 const m4 = new THREE.Matrix4();
@@ -170,6 +170,26 @@ function recycleBand(band, playerDist) {
     }
   }
   if (changed) band.mesh.instanceMatrix.needsUpdate = true;
+}
+
+// Re-seat a band's instances around the start line. Without this, restarting
+// leaves every crystal parked thousands of metres ahead — an empty canyon
+// with an invisible (but still fatal) wall.
+function reseedBand(band) {
+  for (let i = 0; i < band.data.length; i++) {
+    const d = band.data[i];
+    Object.assign(d, band.place(d.side), {
+      dist: d.slot * band.step + rnd() * band.step - 100,
+      rotY: rnd() * Math.PI,
+    });
+    writeMatrix(band.mesh, i, d);
+  }
+  band.mesh.instanceMatrix.needsUpdate = true;
+}
+
+export function resetEnvironment() {
+  reseedBand(bigBand);
+  reseedBand(smallBand);
 }
 
 export function updateEnvironment(dt, camera, time, playerDist) {

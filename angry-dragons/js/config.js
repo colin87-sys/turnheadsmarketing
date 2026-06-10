@@ -24,10 +24,11 @@ export const CONFIG = {
   ringStamina: 20, // stamina restored per ring collected
   orbStamina: 15, // stamina restored per speed orb collected
 
-  // Health / collision: floating obstacles chip health; canyon walls,
-  // the ground and crystal-gate faces are instantly fatal.
+  // Health / collision: floating obstacles chip health, the ground bounces
+  // and chips a little; canyon side walls and crystal-gate faces are fatal.
   healthMax: 100,
   obstacleDamage: 25,
+  groundDamage: 15,
   invulnTime: 1.0, // seconds of damage immunity after a (non-fatal) hit
 
   // Scoring
@@ -40,6 +41,7 @@ export const CONFIG = {
 
   // Rings
   ringRadius: 3.6,
+  ringCatchRadius: 3.9, // generous: anywhere through (or grazing) the hoop counts
 
   // Endless generation
   spawnAhead: 500, // keep the course built this far ahead of the dragon

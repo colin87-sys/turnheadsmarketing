@@ -25,16 +25,18 @@ Any static server works (`npx serve`, GitHub Pages, etc.).
 | A / ← | Move left |
 | D / → | Move right |
 | Hold Space | Boost (drains stamina) |
-| Enter | Start |
-| R | Restart after a crash |
+| Enter / tap | Start |
+| R / FLY AGAIN button | Restart after a crash |
+
+**Mobile (no on-screen buttons):** drag anywhere to steer — the dragon follows your finger's offset like a relative joystick. Hold a second finger down to boost. Tap to start.
 
 ## Rules
 
-- **Rings**: 100 pts × combo. Each consecutive ring adds +0.25x combo (max 5x). Threading the exact center adds a +50 bonus. Missing a ring resets the combo. Each ring restores 20 stamina — rings are the fuel for constant boosting.
+- **Rings** (green): 100 pts × combo. Flying through anywhere inside the hoop counts — even a graze. Each consecutive ring adds +0.25x combo (max 5x). Threading the exact center adds a +50 bonus. Missing a ring resets the combo. Each ring restores 20 stamina — rings are the fuel for constant boosting.
 - **Boost**: 35 → 65 speed while held; drains 25 stamina/s (regen 15/s after a 1s delay).
 - **Speed orbs**: free 80-speed burst for 2 seconds plus 15 stamina, placed just off the racing line.
 - **Distance is score**: 1 point per metre flown — flying fast is worth points by itself.
-- **Damage**: floating ice (pillars, shards, bars, movers) chips 25 health with a 1s grace period. **Canyon walls, the ground and crystal-gate faces are instantly fatal.**
+- **Damage**: floating ice (pillars, shards, bars, movers) chips 25 health, and scraping the ground bounces you up for 15, each with a 1s grace period. **Canyon side walls and crystal-gate faces are instantly fatal** — gate holes are marked with a square glow frame (rings are round and green; orbs are blue).
 - **High scores & sharing**: best score and longest flight are saved locally. After a crash: **Screenshot** (downloads a stamped image of your crash moment) or **Share & Challenge Your Friends** — Instagram, X, TikTok, or a copyable challenge link (`?challenge=SCORE`) that shows friends your score to beat.
 
 ## Difficulty & course design
