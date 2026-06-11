@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mulberry32, makeGlowTexture } from './util.js';
+import { mulberry32, makeGlowTexture, damp } from './util.js';
 import { CONFIG } from './config.js';
 
 // Sunset sky dome, warm fog, icy canyon walls, snow particles and lighting.
@@ -17,6 +17,11 @@ let bigBand = null;
 let smallBand = null;
 let rnd = null;
 
+// Dragon Surge: damped 0..1 mix driving the aurora sky and snow tint.
+let feverMix = 0;
+const snowBaseColor = new THREE.Color(0xffffff);
+const snowFeverColor = new THREE.Color(0xff9aee);
+
 export function createEnvironment(scene) {
   rnd = mulberry32(CONFIG.seed + 99);
   scene.fog = new THREE.Fog(0xd99a7a, 70, 380);
@@ -31,6 +36,8 @@ export function createEnvironment(scene) {
       midColor: { value: new THREE.Color(0x9a5a8e) },
       horizonColor: { value: new THREE.Color(0xff9a55) },
       sunDir: { value: new THREE.Vector3(-0.22, 0.1, -1).normalize() },
+      feverMix: { value: 0 },
+      time: { value: 0 },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -41,13 +48,25 @@ export function createEnvironment(scene) {
     fragmentShader: `
       varying vec3 vDir;
       uniform vec3 topColor, midColor, horizonColor, sunDir;
+      uniform float feverMix, time;
       void main() {
         vec3 d = normalize(vDir);
         float h = clamp(d.y, 0.0, 1.0);
-        vec3 col = mix(horizonColor, midColor, smoothstep(0.0, 0.25, h));
+        // Dragon Surge palette shift: horizon -> magenta, mid -> violet
+        vec3 hor = mix(horizonColor, vec3(1.0, 0.35, 0.85), feverMix * 0.8);
+        vec3 mid = mix(midColor, vec3(0.55, 0.25, 0.9), feverMix * 0.7);
+        vec3 col = mix(hor, mid, smoothstep(0.0, 0.25, h));
         col = mix(col, topColor, smoothstep(0.2, 0.7, h));
         float s = max(dot(d, normalize(sunDir)), 0.0);
         col += vec3(1.0, 0.75, 0.45) * (pow(s, 600.0) * 1.3 + pow(s, 8.0) * 0.35);
+        // Aurora bands during surge: two drifting sine curtains in the upper
+        // sky, fading cyan <-> magenta. Branchless — everything * feverMix.
+        float band1 = sin(d.x * 9.0 + time * 0.7 + d.y * 14.0);
+        float band2 = sin(d.x * 5.0 - time * 0.45 + d.y * 9.0 + 2.1);
+        float curtain = smoothstep(0.15, 0.65, h) * (0.5 + 0.5 * sin(time * 0.3));
+        vec3 aurora = vec3(0.25, 0.95, 0.85) * max(band1, 0.0)
+                    + vec3(0.95, 0.3, 0.95) * max(band2, 0.0);
+        col += aurora * curtain * feverMix * 0.35;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -70,10 +89,11 @@ export function createEnvironment(scene) {
   scene.add(floor);
 
   // --- Canyon walls: recycled instanced crystal spires along both sides.
+  // Walls glow less than gameplay objects so hazards/rewards pop.
   bigBand = makeBand(scene, 13, {
     color: 0x6fb7e8,
     emissive: 0x123a55,
-    emissiveIntensity: 0.4,
+    emissiveIntensity: 0.25,
     place(side) {
       return {
         x: side * (17 + rnd() * 8),
@@ -86,7 +106,7 @@ export function createEnvironment(scene) {
   smallBand = makeBand(scene, 30, {
     color: 0x9fd8f0,
     emissive: 0x1c4a66,
-    emissiveIntensity: 0.5,
+    emissiveIntensity: 0.3,
     place(side) {
       const h = 2 + rnd() * 5;
       return { x: side * (13.5 + rnd() * 3), h, r: h * 0.35, tilt: side * rnd() * 0.3 };
@@ -190,13 +210,25 @@ function reseedBand(band) {
 export function resetEnvironment() {
   reseedBand(bigBand);
   reseedBand(smallBand);
+  feverMix = 0;
 }
 
-export function updateEnvironment(dt, camera, time, playerDist) {
+export function updateEnvironment(dt, camera, time, playerDist, feverActive = false, playerSpeed = 0) {
   sky.position.copy(camera.position);
   floor.position.z = -playerDist;
   recycleBand(bigBand, playerDist);
   recycleBand(smallBand, playerDist);
+
+  // Dragon Surge sky + snow tint (damped so it sweeps in/out smoothly)
+  feverMix = damp(feverMix, feverActive ? 1 : 0, 2.5, dt);
+  sky.material.uniforms.feverMix.value = feverMix;
+  sky.material.uniforms.time.value = time;
+  snow.material.color.lerpColors(snowBaseColor, snowFeverColor, feverMix);
+  snow.material.opacity = 0.75 + feverMix * 0.2;
+
+  // Extra streaming at speed: flakes drift toward the camera so boosting
+  // reads as rushing through the snowfall (cheap speed lines).
+  const speedDrift = Math.max(0, playerSpeed - 35) * 0.5 * dt;
 
   // Snowfall with gentle sway; wrap each flake into a box around the camera.
   const cx = camera.position.x;
@@ -205,7 +237,7 @@ export function updateEnvironment(dt, camera, time, playerDist) {
   for (let i = 0; i < SNOW_COUNT; i++) {
     let x = snowPositions[i * 3];
     let y = snowPositions[i * 3 + 1] - (3.5 + (i % 5)) * dt;
-    let z = snowPositions[i * 3 + 2];
+    let z = snowPositions[i * 3 + 2] + speedDrift;
     x += Math.sin(time * 1.5 + i) * 0.6 * dt;
 
     if (y < cy - 25) y += SNOW_BOX.y;

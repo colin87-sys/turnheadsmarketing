@@ -101,13 +101,15 @@ export const ui = {
     els.stamina.classList.toggle('depleted', game.stamina <= 0.5);
     els.score.textContent = Math.floor(game.score);
 
-    // Score pulses while boosting, glows pink during fever
+    // Score pulses while boosting, warms with combo, glows pink during fever
     els.score.classList.toggle('boost-pulse', player.boosting);
     els.score.classList.toggle('fever', game.feverActive);
+    const tier = game.feverActive ? 5 : comboTier(game.combo);
+    els.score.dataset.tier = tier;
 
     // Combo: intensity tiers escalate the styling; fever overrides everything
     els.comboX.textContent = `×${game.combo.toFixed(2)}`;
-    els.combo.dataset.tier = game.feverActive ? 5 : comboTier(game.combo);
+    els.combo.dataset.tier = tier;
     if (game.combo > lastCombo + 0.001) restartAnim(els.comboX, 'combo-pop');
     lastCombo = game.combo;
 
@@ -151,7 +153,8 @@ export const ui = {
     this._popup('DRAGON SURGE!', 'fever');
   },
 
-  damageFlash() {
+  damageFlash(lethal = false) {
+    els.vignette.classList.toggle('lethal', lethal);
     restartAnim(els.vignette, 'flash-anim');
   },
 
@@ -193,12 +196,21 @@ export const ui = {
         <p class="action">${touch ? 'Tap to take off' : 'Press ENTER to take off'}</p>`;
 
     } else if (type === 'gameover') {
+      const causeText = {
+        wall:   'FLEW INTO THE CANYON WALL',
+        gate:   'CLIPPED THE CRYSTAL WINDOW',
+        shard:  'SHATTERED BY AN ICE SHARD',
+        pillar: 'IMPALED ON AN ICE SPIKE',
+        bar:    'SMASHED INTO AN ICE BEAM',
+        ground: 'GROUND DOWN TO ZERO',
+      }[game.deathCause] || '';
       const pb    = game.highScore;
       const gap   = pb > score ? pb - score : 0;
       const pct   = pb > 0 && gap > 0 ? Math.round((1 - gap / pb) * 100) : null;
       const maxSpd = Math.round(game.maxSpeed);
       html = `
         <h1 class="bad">CRASHED!</h1>
+        ${causeText ? `<p class="death-cause">${causeText}</p>` : ''}
         ${game.isNewHighScore  ? '<p class="newbest">★ NEW HIGH SCORE ★</p>' : ''}
         ${game.isNewBestDistance && !game.isNewHighScore ? '<p class="newbest">★ LONGEST FLIGHT ★</p>' : ''}
         <p class="sub big"><b>${score}</b> points</p>

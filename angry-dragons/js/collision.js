@@ -5,7 +5,7 @@ import { cameraCtl } from './cameraController.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
 import { triggerDeathBurst } from './dragon.js';
-import { burst } from './particles.js';
+import { burst, gateThreadBurst, nearMissSparks } from './particles.js';
 import { comboTier } from './util.js';
 
 // Near-miss cooldown: track per-collider so same obstacle can't spam
@@ -31,14 +31,14 @@ export function updateCollision(dt, player) {
 
   // Canyon walls: fatal
   if (p.x > CONFIG.laneHalfWidth || p.x < -CONFIG.laneHalfWidth) {
-    crash(player);
+    crash(player, 'wall');
     return;
   }
   // Ground: bounce + chip
   if (p.y < CONFIG.laneMinY) {
     p.y = CONFIG.laneMinY;
     player.velocity.y = Math.max(player.velocity.y, 6);
-    hit(player, 0, 0, CONFIG.groundDamage);
+    hit(player, 0, 0, CONFIG.groundDamage, 'ground');
   }
 
   for (const c of colliders) {
@@ -51,7 +51,7 @@ export function updateCollision(dt, player) {
       const hitR   = c.r * 0.65 + R;
       const nearR  = c.r * 1.5 + R;
       if (horiz < hitR && p.y < c.h) {
-        hit(player, Math.sign(p.x - c.x) || 1, 0);
+        hit(player, Math.sign(p.x - c.x) || 1, 0, CONFIG.obstacleDamage, 'pillar');
       } else if (horiz < nearR && horiz >= hitR && p.y < c.h) {
         awardNearMiss(c, player);
       }
@@ -64,14 +64,14 @@ export function updateCollision(dt, player) {
       const hitR  = c.r * 0.70 + R;
       const nearR = c.r * 1.8 + R;
       if (dist3 < hitR) {
-        hit(player, Math.sign(dx) || 1, 0);
+        hit(player, Math.sign(dx) || 1, 0, CONFIG.obstacleDamage, 'shard');
       } else if (dist3 < nearR) {
         awardNearMiss(c, player);
       }
 
     } else if (c.type === 'bar') {
       if (Math.abs(dz) < c.r + R && Math.abs(p.y - c.y) < c.r * 0.75 + R) {
-        hit(player, 0, p.y > c.y ? 1 : -1);
+        hit(player, 0, p.y > c.y ? 1 : -1, CONFIG.obstacleDamage, 'bar');
       } else if (Math.abs(dz) < c.r * 2 + R && Math.abs(p.y - c.y) < c.r * 1.6 + R) {
         awardNearMiss(c, player);
       }
@@ -82,7 +82,7 @@ export function updateCollision(dt, player) {
           Math.abs(p.x - c.gapX) < c.gapW - 0.5 &&
           Math.abs(p.y - c.gapY) < c.gapH - 0.5;
         if (!inGap) {
-          crash(player);
+          crash(player, 'gate');
           return;
         }
         if (!c.passed) {
@@ -116,7 +116,7 @@ function threadGate(player) {
   }
   ui.gatePopup(points);
   sfx.gate();
-  burst(player.position, 0x7fe0ff, { count: 18, speed: 12 });
+  gateThreadBurst(player.position);
   const tierAfter = comboTier(game.combo);
   if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
   if (!game.feverActive && game.consecutiveRings >= CONFIG.feverThreshold) {
@@ -137,9 +137,10 @@ function awardNearMiss(collider, player) {
   game.score += bonus;
   ui.nearMissPopup(bonus);
   sfx.nearMiss();
+  nearMissSparks(player.position);
 }
 
-function hit(player, pushX, pushY, damage = CONFIG.obstacleDamage) {
+function hit(player, pushX, pushY, damage = CONFIG.obstacleDamage, cause = 'shard') {
   if (invuln > 0) return;
   invuln = CONFIG.invulnTime;
   game.health = Math.max(0, game.health - damage);
@@ -153,19 +154,20 @@ function hit(player, pushX, pushY, damage = CONFIG.obstacleDamage) {
     game.consecutiveRings = 0;
     if (game.feverActive) { game.feverActive = false; game.feverTimer = 0; }
   }
-  if (game.health <= 0) die(player);
+  if (game.health <= 0) die(player, cause, false);
 }
 
-function crash(player) {
+function crash(player, cause) {
   game.health = 0;
   cameraCtl.shake(2.8);
-  die(player);
+  die(player, cause, true);
 }
 
-function die(player) {
+function die(player, cause, lethal) {
   game.state = 'gameover';
+  game.deathCause = cause;
   game.deathFreezeTimer = CONFIG.deathFreezeDuration;
-  triggerDeathBurst(player.position.clone());
+  triggerDeathBurst(player.position.clone(), lethal);
   sfx.crash();
-  ui.damageFlash();
+  ui.damageFlash(lethal);
 }

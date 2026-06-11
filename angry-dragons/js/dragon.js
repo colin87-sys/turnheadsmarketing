@@ -10,6 +10,20 @@ let head = null;
 let tailSegs = [];
 const TAIL_COUNT = 9; // more segments = snakier coil
 
+// Materials animated at runtime (boost glow / fever tint)
+let bodyMat = null;
+let wingMat = null;
+let eyeMat = null;
+// Wing-tip contrail markers + fever aura
+let tipMarkerL = null;
+let tipMarkerR = null;
+let auraSprite = null;
+let quality = 1;
+
+export function setDragonQuality(q) {
+  quality = q;
+}
+
 // Rider ponytail
 let riderHead = null;
 const PONY_SEGS = 10;
@@ -18,14 +32,15 @@ let ponyPoints = [];
 let ponyMeshes = [];
 
 // Speed trail: two separate pools — cyan (orb/boost) and blue (boost only)
-const TRAIL_POOL = 80;
+const TRAIL_POOL = 140;
 let trailSprites = [];
 let boostTrailSprites = [];
 let trailTimer = 0;
 let boostTrailTimer = 0;
+let contrailTimer = 0;
 
 // Ice-burst death particles
-const BURST_COUNT = 28;
+const BURST_COUNT = 60;
 let burstParticles = [];
 let burstActive = false;
 let burstTimer = 0;
@@ -48,11 +63,15 @@ function buildWingShape() {
 export function createDragon(scene) {
   group = new THREE.Group();
 
-  const bodyMat  = new THREE.MeshStandardMaterial({ color: 0x3d5080, roughness: 0.55, flatShading: true });
+  bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x3d5080, roughness: 0.55, flatShading: true,
+    emissive: 0xff44cc, emissiveIntensity: 0,
+  });
   const hornMat  = new THREE.MeshStandardMaterial({ color: 0xd8e8f8, roughness: 0.3, flatShading: true });
-  const wingMat  = new THREE.MeshStandardMaterial({
+  wingMat = new THREE.MeshStandardMaterial({
     color: 0x4e6ea8, roughness: 0.65, side: THREE.DoubleSide,
     transparent: true, opacity: 0.93, flatShading: true,
+    emissive: 0x55ccff, emissiveIntensity: 0,
   });
   const riderMat = new THREE.MeshStandardMaterial({ color: 0x1c1f2e, roughness: 0.8 });
   const scalesMat = new THREE.MeshStandardMaterial({ color: 0x5570a0, roughness: 0.4, metalness: 0.15, flatShading: true });
@@ -98,6 +117,15 @@ export function createDragon(scene) {
     brow.rotation.x = 0.9;
     head.add(brow);
   }
+  // Glowing eyes (cyan; shift magenta during Dragon Surge)
+  eyeMat = new THREE.MeshStandardMaterial({
+    color: 0x223344, emissive: 0x55e0ff, emissiveIntensity: 2.2,
+  });
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), eyeMat);
+    eye.position.set(0.3 * s, 0.22, -0.42);
+    head.add(eye);
+  }
   head.position.set(0, 0.38, -2.55);
   group.add(head);
 
@@ -134,6 +162,9 @@ export function createDragon(scene) {
   const wRTip = new THREE.Mesh(new THREE.ShapeGeometry(buildWingShape()), wingMat);
   wRTip.scale.set(0.42, 0.42, 1);
   wingTipR.add(wRTip);
+  tipMarkerR = new THREE.Object3D();
+  tipMarkerR.position.set(2.0, 0, -0.2); // true wing tip for contrails
+  wingTipR.add(tipMarkerR);
   wingPivotR.add(wRRoot, wingTipR);
   group.add(wingPivotR);
 
@@ -147,6 +178,9 @@ export function createDragon(scene) {
   const wLTip = new THREE.Mesh(new THREE.ShapeGeometry(buildWingShape()), wingMat);
   wLTip.scale.set(-0.42, 0.42, 1);
   wingTipL.add(wLTip);
+  tipMarkerL = new THREE.Object3D();
+  tipMarkerL.position.set(-2.0, 0, -0.2);
+  wingTipL.add(tipMarkerL);
   wingPivotL.add(wLRoot, wingTipL);
   group.add(wingPivotL);
 
@@ -165,6 +199,14 @@ export function createDragon(scene) {
   rider.add(scarf);
   rider.position.set(0, 1.12, -0.6);
   group.add(rider);
+
+  // Fever aura: pulsing magenta glow enveloping the dragon during surge
+  auraSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture('255,130,235'), transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  auraSprite.scale.set(9, 9, 1);
+  group.add(auraSprite);
 
   scene.add(group);
 
@@ -220,14 +262,23 @@ export function createDragon(scene) {
   return group;
 }
 
-export function triggerDeathBurst(position) {
+// Lethal crashes (wall/gate) explode hot coral-red; health deaths stay icy.
+export function triggerDeathBurst(position, lethal = false) {
   burstActive = true;
   burstTimer = 1.0;
+  const spread = lethal ? 30 : 22;
   for (const p of burstParticles) {
     p.visible = true;
     p.position.copy(position);
+    if (lethal) {
+      p.material.color.setHex(0xffb09a);
+      p.material.emissive.setHex(0xff3322);
+    } else {
+      p.material.color.setHex(0xaaddff);
+      p.material.emissive.setHex(0x44aaff);
+    }
     p.userData.vel.set(
-      (Math.random() - 0.5) * 22,
+      (Math.random() - 0.5) * spread,
       (Math.random()) * 18 + 4,
       (Math.random() - 0.5) * 18
     );
@@ -245,8 +296,10 @@ export function updateDragon(dt, player, time) {
     player.position.z
   );
 
-  // Banking and pitch
-  group.rotation.z = damp(group.rotation.z, -player.velocity.x * 0.035, 9, dt);
+  // Banking and pitch — banking deepens with speed for drama
+  const speedNorm = Math.min(Math.max((player.speed - 35) / 45, 0), 1);
+  const bankFactor = 0.035 + speedNorm * 0.015;
+  group.rotation.z = damp(group.rotation.z, -player.velocity.x * bankFactor, 9, dt);
   group.rotation.x = damp(group.rotation.x, player.velocity.y * 0.022, 9, dt);
   // Slight yaw toward lateral movement
   group.rotation.y = damp(group.rotation.y, player.velocity.x * 0.008, 6, dt);
@@ -278,7 +331,34 @@ export function updateDragon(dt, player, time) {
     tailSegs[i].rotation.y = damp(tailSegs[i].rotation.y, waveX * 0.4, 14, dt);
   }
 
+  // Boost wing glow + fever tint + eyes + aura (cheap material writes)
+  const wingGlowTarget = player.boosting ? 0.9 : 0;
+  wingMat.emissiveIntensity = damp(wingMat.emissiveIntensity, wingGlowTarget, 6, dt);
+  wingMat.emissive.setHex(player.feverActive ? 0xff44cc : 0x55ccff);
+  bodyMat.emissiveIntensity = damp(bodyMat.emissiveIntensity, player.feverActive ? 0.35 : 0, 4, dt);
+  eyeMat.emissive.setHex(player.feverActive ? 0xff66ee : 0x55e0ff);
+  const auraTarget = player.feverActive ? 0.5 + Math.sin(time * 5) * 0.18 : 0;
+  auraSprite.material.opacity = damp(auraSprite.material.opacity, auraTarget, 5, dt);
+
   group.updateMatrixWorld(true);
+
+  // Wing-tip contrails while boosting: small sprites pinned to the true
+  // wing tips, sampled after the matrix update so they track the flap.
+  if (player.boosting) {
+    contrailTimer -= dt;
+    if (contrailTimer <= 0) {
+      contrailTimer = 0.03 / quality;
+      for (const marker of [tipMarkerL, tipMarkerR]) {
+        const s = trailSprites.find(s => !s.visible);
+        if (!s) break;
+        marker.getWorldPosition(tmpV);
+        s.visible = true;
+        s.userData.life = 0.6; // shorter than body trail = crisp ribbon
+        s.material.color.setHex(player.feverActive ? 0xff9ad6 : 0xcfeeff);
+        s.position.copy(tmpV);
+      }
+    }
+  }
 
   // Ponytail: hair chain
   riderHead.getWorldPosition(tmpV);
@@ -299,7 +379,7 @@ export function updateDragon(dt, player, time) {
   // Cyan speed trail (orb/fast); shifts pink during fever
   trailTimer -= dt;
   if (player.speedActive && trailTimer <= 0) {
-    trailTimer = 0.015;
+    trailTimer = 0.015 / quality;
     const s = trailSprites.find(s => !s.visible);
     if (s) {
       s.visible = true;
@@ -326,7 +406,7 @@ export function updateDragon(dt, player, time) {
   // Blue boost trail (only while boosting); shifts pink during fever
   boostTrailTimer -= dt;
   if (player.boosting && boostTrailTimer <= 0) {
-    boostTrailTimer = 0.022;
+    boostTrailTimer = 0.022 / quality;
     const s = boostTrailSprites.find(s => !s.visible);
     if (s) {
       s.visible = true;
@@ -374,6 +454,9 @@ export function updateDragon(dt, player, time) {
 export function resetDragon(player) {
   group.rotation.set(0, 0, 0);
   head.rotation.set(0, 0, 0);
+  wingMat.emissiveIntensity = 0;
+  bodyMat.emissiveIntensity = 0;
+  auraSprite.material.opacity = 0;
   for (const p of ponyPoints) p.set(player.position.x, player.position.y + 1.5, player.position.z);
   for (const s of trailSprites) { s.visible = false; s.userData.life = 0; }
   for (const s of boostTrailSprites) { s.visible = false; s.userData.life = 0; }

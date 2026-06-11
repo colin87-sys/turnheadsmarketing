@@ -23,25 +23,34 @@ export function initObstacles(s) {
       emissive: 0x10324d,
       emissiveIntensity: 0.4,
     }),
+    // Movers are the active danger: icy body, hot coral warning glow that
+    // pulses in updateObstacles (shared material — one update per frame).
     mover: new THREE.MeshStandardMaterial({
-      color: 0x9adcff,
+      color: 0xbcd8e8,
       flatShading: true,
       roughness: 0.25,
-      emissive: 0x2a6a99,
-      emissiveIntensity: 0.7,
+      emissive: 0xff5a47,
+      emissiveIntensity: 0.9,
     }),
+    // Gate panels lean violet so they never read as orbs or score rings.
     gate: new THREE.MeshStandardMaterial({
-      color: 0x8fd4f5,
+      color: 0x9d9aec,
       transparent: true,
       opacity: 0.55,
       roughness: 0.2,
-      emissive: 0x1c4a66,
+      emissive: 0x3a2c66,
       emissiveIntensity: 0.5,
     }),
     frame: new THREE.MeshStandardMaterial({
       color: 0x55e0ff,
       emissive: 0x2299cc,
       emissiveIntensity: 1.2,
+    }),
+    // Coral warning frame: lethal-edge cue around the safe window.
+    warnFrame: new THREE.MeshStandardMaterial({
+      color: 0xff7449,
+      emissive: 0xdd3322,
+      emissiveIntensity: 1.1,
     }),
   };
 }
@@ -89,9 +98,9 @@ function buildGate(o) {
   panel(right - left, TOP - top, o.gapX, (top + TOP) / 2); // above gap
   panel(right - left, bottom, o.gapX, bottom / 2); // below gap
 
-  const edge = (w, h, cx, cy) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.35), mats.frame);
-    mesh.position.set(cx, cy, 0);
+  const edge = (w, h, cx, cy, mat = mats.frame, z = 0) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.35), mat);
+    mesh.position.set(cx, cy, z);
     group.add(mesh);
   };
   const W = o.gapW * 2;
@@ -101,11 +110,23 @@ function buildGate(o) {
   edge(0.28, H + 0.6, left - 0.14, o.gapY); // left edge
   edge(0.28, H + 0.6, right + 0.14, o.gapY); // right edge
 
+  // Coral outer warning frame on the approach side: "this edge kills".
+  // Sits proud of the wall (local +z, toward the incoming player).
+  const M = 0.85; // outward margin from the cyan frame
+  edge(W + 2 * M + 0.5, 0.24, o.gapX, top + M, mats.warnFrame, 0.8);
+  edge(W + 2 * M + 0.5, 0.24, o.gapX, bottom - M, mats.warnFrame, 0.8);
+  edge(0.24, H + 2 * M + 0.5, left - M, o.gapY, mats.warnFrame, 0.8);
+  edge(0.24, H + 2 * M + 0.5, right + M, o.gapY, mats.warnFrame, 0.8);
+
   group.position.z = -o.dist;
   return group;
 }
 
 export function updateObstacles(dt, time, playerDist) {
+  // Warning pulse on every moving shard (shared material, one write).
+  mats.mover.emissiveIntensity = 0.9 + Math.sin(time * 6) * 0.45;
+  mats.warnFrame.emissiveIntensity = 1.1 + Math.sin(time * 4) * 0.35;
+
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
     if (e.dist < playerDist - CONFIG.cullBehind) {

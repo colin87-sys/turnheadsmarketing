@@ -10,7 +10,8 @@ import { cameraCtl } from './cameraController.js';
 import { initRings, addRing, updateRings, resetRings } from './rings.js';
 import { initObstacles, addObstacle, updateObstacles, resetObstacles } from './obstacles.js';
 import { initPowerups, addOrb, updatePowerups, resetPowerups } from './powerups.js';
-import { initParticles, updateParticles, resetParticles } from './particles.js';
+import { initParticles, updateParticles, resetParticles, setParticleQuality } from './particles.js';
+import { setDragonQuality } from './dragon.js';
 import { updateCollision, resetCollision } from './collision.js';
 import { ui } from './ui.js';
 import { music, sfx } from './sfx.js';
@@ -118,8 +119,12 @@ function buildTunnel(dist) {
 }
 
 // --- Challenge param ---
-const challengeParam = parseInt(new URLSearchParams(window.location.search).get('challenge'), 10);
+const urlParams = new URLSearchParams(window.location.search);
+const challengeParam = parseInt(urlParams.get('challenge'), 10);
 if (Number.isFinite(challengeParam) && challengeParam > 0) game.challengeScore = challengeParam;
+// Debug: force Dragon Surge for visual verification
+const debugFever = urlParams.get('debug') === 'fever';
+if (urlParams.has('debug')) window.__dd = { renderer, game, player };
 
 initInput();
 initTouch(renderer.domElement);
@@ -211,12 +216,60 @@ const clock = new THREE.Clock();
 let screenshotPending = false;
 let screenshotTimer = 0;
 
+// --- Adaptive quality: protect the 60fps floor on weaker devices ---
+// Rolling-average FPS drives a quality scalar that thins particle/trail
+// spawn rates, and at the lowest tier also drops the render resolution.
+// Degrades BEFORE 60 is breached (<55 / <42) and restores with hysteresis.
+let fpsAvg = 60;
+let qualityTier = 0;        // 0 = full, 1 = reduced, 2 = low
+let qualityTimer = 0;       // time spent above the restore threshold
+let warmup = 2;             // ignore first seconds (shader-compile jank)
+const QUALITY_SCALARS = [1, 0.6, 0.35];
+const PIXEL_RATIOS = [
+  Math.min(window.devicePixelRatio, 2),
+  Math.min(window.devicePixelRatio, 1.5),
+  1,
+];
+
+function applyQuality(tier) {
+  qualityTier = tier;
+  setParticleQuality(QUALITY_SCALARS[tier]);
+  setDragonQuality(QUALITY_SCALARS[tier]);
+  renderer.setPixelRatio(PIXEL_RATIOS[tier]);
+}
+
+function updateQuality(dt) {
+  if (warmup > 0) { warmup -= dt; return; }
+  fpsAvg += ((1 / Math.max(dt, 1e-4)) - fpsAvg) * Math.min(dt * 2, 1);
+  const degradeAt = [55, 42, 0][qualityTier];
+  const restoreAt = [Infinity, 63, 50][qualityTier];
+  if (fpsAvg < degradeAt) {
+    applyQuality(qualityTier + 1);
+    qualityTimer = 0;
+  } else if (fpsAvg > restoreAt) {
+    qualityTimer += dt;
+    if (qualityTimer > 3) {
+      applyQuality(qualityTier - 1);
+      qualityTimer = 0;
+    }
+  } else {
+    qualityTimer = 0;
+  }
+}
+
 function tick() {
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
+  updateQuality(dt);
 
   if (game.state === 'playing') {
     game.time += dt;
+
+    // Debug: hold Dragon Surge on (visual verification only)
+    if (debugFever) {
+      game.feverActive = true;
+      game.feverTimer = CONFIG.feverDuration;
+    }
     player.update(dt);
     game.distance = player.dist;
     game.score += player.speed * dt * CONFIG.distanceScore;
@@ -279,10 +332,10 @@ function tick() {
 
   const t = clock.getElapsedTime();
   updateDragon(dt, player, t);
-  updateParticles(dt);
+  updateParticles(dt, camera);
   updateObstacles(dt, t, player.dist);
   cameraCtl.update(dt, player);
-  updateEnvironment(dt, camera, t, player.dist);
+  updateEnvironment(dt, camera, t, player.dist, game.feverActive, player.speed);
 
   renderer.render(scene, camera);
 }

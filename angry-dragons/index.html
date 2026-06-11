@@ -27,6 +27,10 @@
     .score { font-size: 40px; font-weight: 700; text-shadow: 0 0 18px rgba(80, 190, 255, 0.8), 0 2px 4px rgba(0,0,0,0.5); transition: transform 0.08s, color 0.3s; }
     .score.boost-pulse { animation: score-pulse 0.18s ease-out; }
     .score.fever { color: #ffb8ff; text-shadow: 0 0 22px rgba(255,120,255,0.9), 0 2px 4px rgba(0,0,0,0.5); }
+    /* Score warms with combo tier (fever class wins) */
+    .score[data-tier="2"]:not(.fever) { color: #fff3d8; text-shadow: 0 0 18px rgba(255,210,110,0.7), 0 2px 4px rgba(0,0,0,0.5); }
+    .score[data-tier="3"]:not(.fever) { color: #ffe9c2; text-shadow: 0 0 20px rgba(255,170,70,0.85), 0 2px 4px rgba(0,0,0,0.5); }
+    .score[data-tier="4"]:not(.fever) { color: #ffdcae; text-shadow: 0 0 22px rgba(255,130,60,0.95), 0 2px 4px rgba(0,0,0,0.5); }
     @keyframes score-pulse { 0%{transform:scale(1)} 50%{transform:scale(1.12)} 100%{transform:scale(1)} }
 
     /* Combo multiplier: escalating intensity tiers right under the score */
@@ -80,6 +84,7 @@
 
     /* --- damage / orb flash --- */
     .vignette  { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(255,40,40,0.55) 100%); }
+    .vignette.lethal { background: radial-gradient(ellipse at center, rgba(255,30,30,0.25) 20%, rgba(255,20,20,0.8) 100%); }
     .blue-flash{ position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(110,200,255,0.22) 0%, transparent 70%); }
     .flash-anim{ animation: flash 0.45s ease-out forwards; }
     @keyframes flash { 0%{opacity:1} 100%{opacity:0} }
@@ -107,6 +112,7 @@
     .screen .action  { margin-top: 26px; font-size: 18px; letter-spacing: 3px; color: #ffd86a; animation: pulse 1.6s ease-in-out infinite; }
     .screen .action-key { margin-top: 12px; font-size: 13px; letter-spacing: 2px; opacity: 0.5; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+    .death-cause { color: #ff9a8a; font-size: 14px; letter-spacing: 3px; margin: -8px 0 12px; opacity: 0.9; }
     .newbest   { color: #ffd86a; font-size: 20px; letter-spacing: 4px; margin-bottom: 10px;
       text-shadow: 0 0 16px rgba(255,200,90,0.9); animation: pulse 1.2s ease-in-out infinite; }
     .challenge     { color: #ff9a5a; font-size: 16px; letter-spacing: 2px; margin: 6px 0 10px; }
