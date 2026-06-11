@@ -110,6 +110,37 @@ export function toggleSfxMute() {
   return sfxMuted;
 }
 
+// --- Noise helper: one cached 2s white-noise buffer, one-shot sources ---
+let noiseBuffer = null;
+function getNoiseBuffer(a) {
+  if (!noiseBuffer) {
+    noiseBuffer = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+// Filtered noise burst (whooshes, impacts).
+function noiseWhoosh({ from = 800, to = 3000, dur = 0.25, vol = 0.12, q = 1.2, delay = 0 }) {
+  const a = getCtx();
+  if (!a) return;
+  const t0 = a.currentTime + delay;
+  const src = a.createBufferSource();
+  src.buffer = getNoiseBuffer(a);
+  const bp = a.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = q;
+  bp.frequency.setValueAtTime(from, t0);
+  bp.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+  const g = a.createGain();
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(bp).connect(g).connect(sfxBus);
+  src.start(t0);
+  src.stop(t0 + dur + 0.05);
+}
+
 // --- SFX helpers ---
 function tone({ freq = 440, end = 0, dur = 0.2, type = 'sine', vol = 0.12, delay = 0 }) {
   const a = getCtx();
@@ -128,9 +159,12 @@ function tone({ freq = 440, end = 0, dur = 0.2, type = 'sine', vol = 0.12, delay
 }
 
 export const sfx = {
+  // Glassy ice-bell pluck: pure fundamental + bright inharmonic partial
   ring(combo = 1) {
-    tone({ freq: 700 + combo * 60, end: 1100 + combo * 60, dur: 0.18, vol: 0.14 });
-    tone({ freq: 1480, dur: 0.12, type: 'triangle', vol: 0.06, delay: 0.05 });
+    const f = 700 + combo * 60;
+    tone({ freq: f, end: f * 1.5, dur: 0.16, vol: 0.13 });
+    tone({ freq: f * 2.76, dur: 0.22, type: 'sine', vol: 0.07 });
+    tone({ freq: 1480, dur: 0.1, type: 'triangle', vol: 0.05, delay: 0.04 });
   },
   orb() {
     tone({ freq: 300, end: 950, dur: 0.3, type: 'sawtooth', vol: 0.08 });
@@ -148,10 +182,12 @@ export const sfx = {
   },
   boostStart() {
     tone({ freq: 200, end: 600, dur: 0.3, type: 'sawtooth', vol: 0.07 });
+    noiseWhoosh({ from: 300, to: 1600, dur: 0.35, vol: 0.08 });
   },
+  // Whipping air whoosh as something deadly slides past
   nearMiss() {
-    tone({ freq: 880, end: 1320, dur: 0.15, type: 'triangle', vol: 0.12 });
-    tone({ freq: 660, end: 1320, dur: 0.1, type: 'triangle', vol: 0.06, delay: 0.08 });
+    noiseWhoosh({ from: 700, to: 3200, dur: 0.22, vol: 0.16, q: 1.6 });
+    tone({ freq: 880, end: 1320, dur: 0.12, type: 'triangle', vol: 0.07, delay: 0.04 });
   },
   feverStart() {
     [523.25, 659.25, 783.99, 1046.50].forEach((f, i) =>
@@ -255,11 +291,11 @@ const SCHED_INTERVAL = 100; // ms between scheduler runs
 
 const LOOP_LEN = 64 * E8; // total loop duration in seconds
 
-function seqToEvents(seq, layerKey, oscType, vol, durMult = 0.85) {
+function seqToEvents(seq, layerKey, oscType, vol, durMult = 0.85, freqMult = 1) {
   const out = [];
   let t = 0;
   for (const [freq, dur] of seq) {
-    if (freq > 0) out.push({ t, freq, durS: dur * E8 * durMult, layer: layerKey, osc: oscType, vol });
+    if (freq > 0) out.push({ t, freq: freq * freqMult, durS: dur * E8 * durMult, layer: layerKey, osc: oscType, vol });
     t += dur * E8;
   }
   return out;
@@ -270,6 +306,8 @@ function buildEvents() {
     ...seqToEvents(MELODY_SEQ, 'melody', 'square', 0.16),
     ...seqToEvents(BASS_SEQ,   'bass',   'triangle', 0.22, 0.88),
     ...seqToEvents(HIGH_SEQ,   'high',   'triangle', 0.13),
+    // Dragon Surge lead: the hook an octave up on a screaming saw
+    ...seqToEvents(MELODY_SEQ, 'feverlead', 'sawtooth', 0.11, 0.8, 2),
   ];
 
   const e16 = E8 / 2;
@@ -291,6 +329,9 @@ function buildEvents() {
       if (beat % 2 === 1) all.push({ t: bt, special: 'snare', layer: 'perc' });
       all.push({ t: bt,      special: 'hat', layer: 'perc' });
       all.push({ t: bt + E8, special: 'hat', layer: 'perc' });
+      // Heavy layer at combo >= 3: deeper kick doubled, clap on backbeat
+      all.push({ t: bt, special: 'kick2', layer: 'perc2' });
+      if (beat % 2 === 1) all.push({ t: bt, special: 'clap', layer: 'perc2' });
     }
   }
 
@@ -323,6 +364,27 @@ function playNoteEvent(ev, absTime) {
       osc.frequency.exponentialRampToValueAtTime(28, absTime + 0.09);
       g.gain.setValueAtTime(0.45, absTime);
       g.gain.exponentialRampToValueAtTime(0.001, absTime + 0.10);
+    } else if (ev.special === 'kick2') {
+      // Deeper, longer kick layered under the main one
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(85, absTime);
+      osc.frequency.exponentialRampToValueAtTime(22, absTime + 0.14);
+      g.gain.setValueAtTime(0.5, absTime);
+      g.gain.exponentialRampToValueAtTime(0.001, absTime + 0.16);
+    } else if (ev.special === 'clap') {
+      // Noise clap stacked on the snare backbeat
+      const src = a.createBufferSource();
+      src.buffer = getNoiseBuffer(a);
+      const bp = a.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1600;
+      bp.Q.value = 1.4;
+      g.gain.setValueAtTime(0.3, absTime);
+      g.gain.exponentialRampToValueAtTime(0.001, absTime + 0.08);
+      src.connect(bp).connect(g).connect(layerGain);
+      src.start(absTime);
+      src.stop(absTime + 0.1);
+      return;
     } else if (ev.special === 'snare') {
       osc.type = 'square';
       osc.frequency.setValueAtTime(220, absTime);
@@ -362,9 +424,16 @@ function runScheduler() {
   const now = a.currentTime;
   const horizon = now + LOOK_AHEAD;
 
+  // Tab throttling can leave us several loops behind — skip ahead instead
+  // of replaying every missed event into the safety cap.
+  if (now - loopOffset > LOOP_LEN * 2) {
+    loopOffset = now;
+    nextEvtIdx = 0;
+  }
+
   // Walk through events; when we reach end of loop, wrap to next loop
   let safety = 0;
-  while (safety++ < 800) {
+  while (safety++ < 3000) {
     const ev = events[nextEvtIdx];
     const absTime = loopOffset + ev.t;
 
@@ -390,17 +459,47 @@ export const music = {
     events = buildEvents();
 
     layers = {
-      bass:   makeLayer(),
-      melody: makeLayer(),
-      high:   makeLayer(),
-      arp:    makeLayer(),
-      perc:   makeLayer(),
-      fever:  makeLayer(),
+      bass:      makeLayer(),
+      melody:    makeLayer(),
+      high:      makeLayer(),
+      arp:       makeLayer(),
+      perc:      makeLayer(),
+      perc2:     makeLayer(),
+      fever:     makeLayer(),
+      feverlead: makeLayer(),
+      wind:      makeLayer(),
     };
 
     // Permanently-on layers
     layers.bass.gain.value   = 1;
     layers.melody.gain.value = 1;
+
+    // Echo: dotted-eighth delay with filtered feedback. Sends tap the layer
+    // gains so fading a layer also fades its echoes.
+    const delay = a.createDelay(1);
+    delay.delayTime.value = E8 * 1.5; // dotted eighth at 160 BPM
+    const feedback = a.createGain();
+    feedback.gain.value = 0.3;
+    const echoFilter = a.createBiquadFilter();
+    echoFilter.type = 'lowpass';
+    echoFilter.frequency.value = 2000;
+    const echoOut = a.createGain();
+    echoOut.gain.value = 0.4;
+    delay.connect(echoFilter).connect(feedback).connect(delay);
+    delay.connect(echoOut).connect(musicBus);
+    layers.melody.connect(delay);
+    layers.high.connect(delay);
+    layers.feverlead.connect(delay);
+
+    // Boost wind: looped filtered noise under the arpeggio
+    const windSrc = a.createBufferSource();
+    windSrc.buffer = getNoiseBuffer(a);
+    windSrc.loop = true;
+    const windFilter = a.createBiquadFilter();
+    windFilter.type = 'lowpass';
+    windFilter.frequency.value = 420;
+    windSrc.connect(windFilter).connect(layers.wind);
+    windSrc.start();
 
     loopOffset = a.currentTime + 0.05;
     nextEvtIdx = 0;
@@ -424,13 +523,16 @@ export const music = {
 
     // Layers come in earlier so the track builds with the very first combos
     layers.arp.gain.setTargetAtTime(player.boosting ? 1 : 0, now, FAST);
+    layers.wind.gain.setTargetAtTime(player.boosting ? 0.35 : 0, now, FAST);
     layers.high.gain.setTargetAtTime(game.combo >= 1.5 ? 1 : 0, now, SLOW);
     layers.perc.gain.setTargetAtTime(game.combo >= 2 ? 1 : 0, now, FAST);
+    layers.perc2.gain.setTargetAtTime(game.combo >= 3 ? 1 : 0, now, FAST);
     layers.fever.gain.setTargetAtTime(game.feverActive ? 1 : 0, now, FAST);
+    layers.feverlead.gain.setTargetAtTime(game.feverActive ? 1 : 0, now, FAST);
 
     // Slightly louder music during fever
     if (!musicMuted) {
-      musicBus.gain.setTargetAtTime(game.feverActive ? 1.15 : 1.0, now, SLOW);
+      musicBus.gain.setTargetAtTime(game.feverActive ? 1.2 : 1.0, now, SLOW);
     }
   },
 };

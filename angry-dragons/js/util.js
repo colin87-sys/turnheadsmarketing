@@ -38,3 +38,31 @@ export function makeGlowTexture(rgb = '160,220,255') {
   g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
 }
+
+// Circle-outline shockwave texture (white; tint via material color).
+export function makeRingTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(255,255,255,1)';
+  g.shadowColor = 'rgba(255,255,255,0.9)';
+  g.shadowBlur = 10;
+  g.lineWidth = 7;
+  g.beginPath();
+  g.arc(64, 64, 50, 0, Math.PI * 2);
+  g.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+// Rectangle-outline shockwave texture (matches the gate window shape).
+export function makeRectTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(255,255,255,1)';
+  g.shadowColor = 'rgba(255,255,255,0.9)';
+  g.shadowBlur = 10;
+  g.lineWidth = 7;
+  g.strokeRect(20, 26, 88, 76);
+  return new THREE.CanvasTexture(c);
+}

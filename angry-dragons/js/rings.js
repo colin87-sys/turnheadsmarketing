@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { game } from './gameState.js';
 import { ui } from './ui.js';
 import { sfx } from './sfx.js';
-import { burst } from './particles.js';
+import { burst, ringBurst } from './particles.js';
 import { comboTier } from './util.js';
 
 const tmpV = new THREE.Vector3();
@@ -38,8 +38,8 @@ export function updateRings(dt, player, time) {
     if (!r.collected && !r.missed) {
       r.mesh.rotation.z = time * 0.6;
 
-      // Rings glow brighter during fever
-      const feverGlow = game.feverActive ? 4.5 : 1.8;
+      // Rings glow brighter as the combo climbs; brightest during fever
+      const feverGlow = game.feverActive ? 4.5 : 1.8 + comboTier(game.combo) * 0.4;
       r.mesh.material.emissiveIntensity = feverGlow;
       r.mesh.material.emissive.setHex(game.feverActive ? 0x80ffcc : 0x12c95e);
       r.mesh.scale.setScalar(1 + Math.sin(time * 3 + r.dist) * 0.05 + (game.feverActive ? 0.08 : 0));
@@ -83,11 +83,14 @@ function collect(r, centerDist) {
   ui.ringPopup(points, perfect);
   sfx.ring(game.combo);
 
+  // Perfect rings flash GOLD: tint the mesh itself for the flash-out
+  // animation (updateRings stops re-setting emissive once collected).
+  if (perfect) {
+    r.mesh.material.color.setHex(0xffd86a);
+    r.mesh.material.emissive.setHex(0xffaa22);
+  }
   tmpV.set(r.x, r.y, -r.dist);
-  burst(tmpV, perfect ? 0xffd86a : 0x4dffa0, {
-    count: perfect ? 22 : 14,
-    speed: perfect ? 13 : 10,
-  });
+  ringBurst(tmpV, perfect);
   const tierAfter = comboTier(game.combo);
   if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
 
