@@ -21,6 +21,16 @@ export const CONFIG = {
   speedRampEnd: 90,       // seconds to reach max ramp
   speedRampMax: 1.35,     // max multiplier on base/boost speed
 
+  // Late-game reachability: course geometry is designed against the real
+  // top speed (orb + full ramp), not raw boostSpeed, so skilled players can
+  // stay boosted through 2000m+ chains instead of braking.
+  lineDesignSpeed: 80 * 1.35, // worst-case travel speed used for reach math
+  minRewardHopTime: 0.72,     // hard floor on hop reaction time at design speed
+  idealRewardHopTime: 0.85,   // target hop reaction time at design speed
+  lateGameReachSafety: 0.68,  // fraction of theoretical reach used late-game
+  gateReachSafety: 0.62,      // fraction of theoretical reach a gate may push
+  boostSteeringBonus: 1.15,   // lateral/vertical control multiplier while boosting
+
   // Stamina system — tuned so a player who chains rings/windows/orbs can
   // stay boosted indefinitely (drain 16/s vs ~1 reward per second at boost).
   staminaMax: 100,
@@ -53,6 +63,7 @@ export const CONFIG = {
 
   // Fever / Dragon Surge
   feverThreshold: 8,      // consecutive rings to trigger fever
+  feverThresholdFirst: 5, // first-ever surge comes sooner to hook new players
   feverDuration: 8,       // seconds of surge state
   feverMultiplier: 2.0,   // score multiplier during surge
 

@@ -10,7 +10,7 @@ import { cameraCtl } from './cameraController.js';
 import { initRings, addRing, updateRings, resetRings } from './rings.js';
 import { initObstacles, addObstacle, updateObstacles, resetObstacles } from './obstacles.js';
 import { initPowerups, addOrb, updatePowerups, resetPowerups } from './powerups.js';
-import { initParticles, updateParticles, resetParticles, setParticleQuality } from './particles.js';
+import { initParticles, updateParticles, resetParticles, setParticleQuality, boostStreaks } from './particles.js';
 import { setDragonQuality } from './dragon.js';
 import { updateCollision, resetCollision } from './collision.js';
 import { ui } from './ui.js';
@@ -133,8 +133,35 @@ cameraCtl.init(camera, player);
 ui.showScreen('start');
 
 window.addEventListener('pointerdown', () => {
+  music.resumeFromBackground(); // no-op unless audio was background-silenced
   if (game.state === 'ready') startGame();
+  else if (game.state === 'paused') resumeFromPause();
 });
+
+// --- Background pause: switching apps silences audio and freezes the run ---
+// No auto-resume when the page becomes visible again; the player must tap.
+let resumeFlush = false; // discard the stale clock delta on the resume frame
+
+function pauseForBackground() {
+  music.pauseForBackground();
+  if (game.state === 'playing') {
+    game.state = 'paused';
+    ui.showScreen('paused');
+  }
+}
+
+function resumeFromPause() {
+  music.resumeFromBackground();
+  ui.hideScreen();
+  game.state = 'playing';
+  resumeFlush = true;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseForBackground();
+});
+window.addEventListener('pagehide', pauseForBackground);
+window.addEventListener('blur', pauseForBackground);
 
 // Share card: re-renders the scene at crash moment (with death particles visible)
 // and stamps stats over it.
@@ -207,6 +234,7 @@ function restart() {
 
 window.addEventListener('keydown', (e) => {
   if (game.state === 'ready'    && (e.code === 'Enter' || e.code === 'Space')) startGame();
+  else if (game.state === 'paused') resumeFromPause();
   else if (game.state === 'gameover' && e.code === 'KeyR') restart();
 });
 
@@ -257,9 +285,16 @@ function updateQuality(dt) {
   }
 }
 
+const tmpProj = new THREE.Vector3();
+let streakTimer = 0;
+
 function tick() {
   requestAnimationFrame(tick);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  let dt = Math.min(clock.getDelta(), 0.05);
+  if (resumeFlush) { dt = 0; resumeFlush = false; } // no jump after resume
+  // Background pause: freeze everything (player, collision, particles,
+  // level, music). The last rendered frame stays under the resume overlay.
+  if (game.state === 'paused') return;
   updateQuality(dt);
 
   if (game.state === 'playing') {
@@ -286,6 +321,15 @@ function tick() {
       sfx.boostStart();
     }
     boostWasActive = player.boosting;
+
+    // Boost speed streaks: thin lines whipping past the camera
+    if (player.boosting) {
+      streakTimer -= dt;
+      if (streakTimer <= 0) {
+        streakTimer = 0.045;
+        boostStreaks(player.position, game.feverActive);
+      }
+    }
 
     // Distance milestones
     const ms = Math.floor(player.dist / CONFIG.milestoneStep);
@@ -338,6 +382,17 @@ function tick() {
   updateEnvironment(dt, camera, t, player.dist, game.feverActive, player.speed);
 
   renderer.render(scene, camera);
+
+  // Anchor the multiplier/surge meter just below the dragon. Projected after
+  // render so the camera's world-inverse matrix is current-frame.
+  if (game.state === 'playing') {
+    tmpProj.set(player.position.x, player.position.y - 2.2, player.position.z).project(camera);
+    ui.setDragonMeterPos(
+      (tmpProj.x * 0.5 + 0.5) * window.innerWidth,
+      (-tmpProj.y * 0.5 + 0.5) * window.innerHeight,
+      tmpProj.z < 1
+    );
+  }
 }
 
 tick();

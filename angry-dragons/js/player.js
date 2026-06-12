@@ -46,8 +46,11 @@ export const player = {
     this.wasBoosting = this.boosting;
 
     const axes = getAxes();
-    this.velocity.x = damp(this.velocity.x, axes.x * CONFIG.lateralSpeed, CONFIG.moveAccel, dt);
-    this.velocity.y = damp(this.velocity.y, axes.y * CONFIG.verticalSpeed, CONFIG.moveAccel, dt);
+    // Boost steering assist: extra control authority while boosting so high
+    // speed stays flyable — boost should feel fast, not slippery.
+    const steer = this.boosting ? CONFIG.boostSteeringBonus : 1;
+    this.velocity.x = damp(this.velocity.x, axes.x * CONFIG.lateralSpeed * steer, CONFIG.moveAccel * steer, dt);
+    this.velocity.y = damp(this.velocity.y, axes.y * CONFIG.verticalSpeed * steer, CONFIG.moveAccel * steer, dt);
     this.position.x += this.velocity.x * dt;
     this.position.y += this.velocity.y * dt;
 

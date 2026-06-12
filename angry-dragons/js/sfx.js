@@ -64,10 +64,21 @@ function ensureSilentMedia() {
   }
 }
 
+// Background pause: while true, all buses are silenced and the scheduler is
+// stopped. Audio only comes back through music.resumeFromBackground(), which
+// must be driven by a user gesture — never auto-resume on visibilitychange.
+let backgroundPaused = false;
+
 // iOS/WebKit only unlocks audio from a *completed* gesture (touchend/click);
 // the game's pointerdown handlers alone are not enough. Resume the context on
 // any finished gesture, and kick output with a silent buffer for older iOS.
 function unlockAudio() {
+  // Any completed gesture while visible also counts as the "tap to resume"
+  // for audio silenced by backgrounding.
+  if (backgroundPaused) {
+    if (document.hidden) return;
+    music.resumeFromBackground();
+  }
   ensureSilentMedia();
   const a = getCtx();
   if (!a || a.state === 'running') return;
@@ -83,15 +94,11 @@ for (const evt of ['touchend', 'pointerup', 'click', 'keydown']) {
   window.addEventListener(evt, unlockAudio, { passive: true });
 }
 
-// iOS suspends the context when the tab is backgrounded or interrupted
-// (phone call, Siri); resume when the page becomes visible again.
+// Backgrounding the tab (app switch, phone call, lock screen) must stop all
+// sound immediately. Deliberately no auto-resume on becoming visible again —
+// the game shows TAP TO RESUME and resumes from that gesture.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    if (silentMedia) silentMedia.pause();
-  } else {
-    if (ctx && ctx.state !== 'running') ctx.resume();
-    if (silentMedia) ensureSilentMedia();
-  }
+  if (document.hidden) music.pauseForBackground();
 });
 
 export function toggleMusicMute() {
@@ -290,6 +297,29 @@ const LOOK_AHEAD = 0.4; // schedule this many seconds ahead
 const SCHED_INTERVAL = 100; // ms between scheduler runs
 
 const LOOP_LEN = 64 * E8; // total loop duration in seconds
+
+// Boost wind: looped filtered noise under the arpeggio. Kept stoppable so
+// background pause can kill the looping source outright.
+let windSrc = null;
+
+function startWind() {
+  const a = getCtx();
+  if (!a || !layers.wind || windSrc) return;
+  windSrc = a.createBufferSource();
+  windSrc.buffer = getNoiseBuffer(a);
+  windSrc.loop = true;
+  const windFilter = a.createBiquadFilter();
+  windFilter.type = 'lowpass';
+  windFilter.frequency.value = 420;
+  windSrc.connect(windFilter).connect(layers.wind);
+  windSrc.start();
+}
+
+function stopWind() {
+  if (!windSrc) return;
+  try { windSrc.stop(); windSrc.disconnect(); } catch { /* already stopped */ }
+  windSrc = null;
+}
 
 function seqToEvents(seq, layerKey, oscType, vol, durMult = 0.85, freqMult = 1) {
   const out = [];
@@ -491,15 +521,7 @@ export const music = {
     layers.high.connect(delay);
     layers.feverlead.connect(delay);
 
-    // Boost wind: looped filtered noise under the arpeggio
-    const windSrc = a.createBufferSource();
-    windSrc.buffer = getNoiseBuffer(a);
-    windSrc.loop = true;
-    const windFilter = a.createBiquadFilter();
-    windFilter.type = 'lowpass';
-    windFilter.frequency.value = 420;
-    windSrc.connect(windFilter).connect(layers.wind);
-    windSrc.start();
+    startWind();
 
     loopOffset = a.currentTime + 0.05;
     nextEvtIdx = 0;
@@ -510,6 +532,50 @@ export const music = {
   stop() {
     musicActive = false;
     clearInterval(schedulerTimer);
+    stopWind();
+  },
+
+  // Hard-silence everything the moment the app is backgrounded: stop the
+  // scheduler, kill looping sources, zero both buses, pause the silent iOS
+  // media element, and suspend the context. No auto-resume — audio comes
+  // back only via resumeFromBackground() from a user gesture.
+  pauseForBackground() {
+    backgroundPaused = true;
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+    if (silentMedia) silentMedia.pause();
+    stopWind();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (const bus of [musicBus, sfxBus]) {
+      if (!bus) continue;
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.value = 0;
+    }
+    if (ctx.state === 'running') {
+      const p = ctx.suspend();
+      if (p && p.catch) p.catch(() => {});
+    }
+  },
+
+  // Restore audio after a background pause. Must be called from a user
+  // gesture. Restarts the music loop cleanly from "now" instead of
+  // fast-forwarding through everything missed while backgrounded.
+  resumeFromBackground() {
+    if (!backgroundPaused) return;
+    backgroundPaused = false;
+    const a = getCtx(); // also resumes a suspended context
+    if (!a) return;
+    ensureSilentMedia();
+    musicBus.gain.setTargetAtTime(musicMuted ? 0 : 1, a.currentTime, 0.05);
+    sfxBus.gain.setTargetAtTime(sfxMuted ? 0 : 1, a.currentTime, 0.05);
+    if (musicActive) {
+      startWind();
+      loopOffset = a.currentTime + 0.05;
+      nextEvtIdx = 0;
+      runScheduler();
+      schedulerTimer = setInterval(runScheduler, SCHED_INTERVAL);
+    }
   },
 
   // Called every frame from main.js to fade layers in/out.

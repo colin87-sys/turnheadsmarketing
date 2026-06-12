@@ -120,32 +120,51 @@ function shockwave(pos, colorHex, { rect = false, grow = 16, life = 0.5, aspect 
 // Ring collect: green sparks; perfect = gold sparks + gold ring shockwave.
 export function ringBurst(pos, perfect) {
   if (perfect) {
-    burst(pos, 0xffd86a, { count: 20, speed: 13, size: 1.0 });
-    burst(pos, 0xfff2c0, { count: 8, speed: 18, size: 0.6, life: 0.5 });
-    shockwave(pos, 0xffd86a, { grow: 22, life: 0.55 });
+    burst(pos, 0xffd86a, { count: 26, speed: 14, size: 1.1 });
+    burst(pos, 0xfff2c0, { count: 10, speed: 20, size: 0.65, life: 0.5 });
+    shockwave(pos, 0xffd86a, { grow: 30, life: 0.6 });
   } else {
     burst(pos, 0x4dffa0, { count: 14, speed: 10 });
   }
 }
 
-// Gate thread: cyan crystal sparks + rectangular shockwave shaped like the window.
+// Gate thread: cyan crystal shimmer + rectangular shockwave shaped like the window.
 export function gateThreadBurst(pos) {
-  burst(pos, 0x7fe0ff, { count: 16, speed: 12 });
-  burst(pos, 0xeaffff, { count: 6, speed: 17, size: 0.6, life: 0.45 });
-  shockwave(pos, 0x7fe0ff, { rect: true, grow: 20, life: 0.5, aspect: 0.85 });
+  burst(pos, 0x7fe0ff, { count: 20, speed: 13 });
+  burst(pos, 0xeaffff, { count: 9, speed: 19, size: 0.65, life: 0.5 });
+  shockwave(pos, 0x7fe0ff, { rect: true, grow: 26, life: 0.55, aspect: 0.85 });
 }
 
 // Near miss: coral streaks that whip past the camera. Lateral velocity plus
 // a strong +z bias; the streaks are elongated along their screen velocity.
 const NEAR_BIAS = new THREE.Vector3();
 export function nearMissSparks(pos) {
-  const n = Math.round(6 * quality) || 1;
+  const n = Math.round(8 * quality) || 1;
   for (let i = 0; i < n; i++) {
-    NEAR_BIAS.set(0, 0, 28 + Math.random() * 14);
+    NEAR_BIAS.set(0, 0, 36 + Math.random() * 18);
     spawn(pos, i % 3 ? 0xff7449 : 0xffb13d, {
-      speed: 9, size: 0.55, life: 0.45,
+      speed: 9, size: 0.6, life: 0.45,
       gravityScale: 0, drag: 0, stretch: 3.2,
       velBias: NEAR_BIAS,
+    });
+  }
+}
+
+// Boost speed streaks: long thin lines spawned ahead of the dragon that race
+// toward the camera, oriented radially so they read as classic speed lines.
+const STREAK_BIAS = new THREE.Vector3();
+const STREAK_POS = new THREE.Vector3();
+export function boostStreaks(pos, fever = false) {
+  const n = Math.round(2 * quality) || 1;
+  for (let i = 0; i < n; i++) {
+    const dx = (Math.random() - 0.5) * 16;
+    const dy = (Math.random() - 0.5) * 10;
+    STREAK_POS.set(pos.x + dx, pos.y + dy, pos.z - 35 - Math.random() * 20);
+    STREAK_BIAS.set(dx * 2.2, dy * 2.2, 60 + Math.random() * 30);
+    spawn(STREAK_POS, fever ? 0xff9ad6 : 0x9fd0ff, {
+      speed: 2, size: 0.5, life: 0.6,
+      gravityScale: 0, drag: 0, stretch: 6,
+      velBias: STREAK_BIAS,
     });
   }
 }

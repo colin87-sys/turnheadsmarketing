@@ -94,10 +94,11 @@ function collect(r, centerDist) {
   const tierAfter = comboTier(game.combo);
   if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
 
-  // Check fever threshold
-  if (!game.feverActive && game.consecutiveRings >= CONFIG.feverThreshold) {
+  // Check fever threshold (first-ever surge triggers sooner)
+  if (!game.feverActive && game.consecutiveRings >= game.feverGoal) {
     game.feverActive = true;
     game.feverTimer = CONFIG.feverDuration;
+    game.markSurgeSeen();
     ui.feverStart();
     sfx.feverStart();
     burst(tmpV, 0xff88ff, { count: 30, speed: 16, size: 1.3 });

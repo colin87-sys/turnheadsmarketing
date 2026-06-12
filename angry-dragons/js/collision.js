@@ -119,9 +119,10 @@ function threadGate(player) {
   gateThreadBurst(player.position);
   const tierAfter = comboTier(game.combo);
   if (tierAfter > tierBefore) sfx.comboUp(tierAfter);
-  if (!game.feverActive && game.consecutiveRings >= CONFIG.feverThreshold) {
+  if (!game.feverActive && game.consecutiveRings >= game.feverGoal) {
     game.feverActive = true;
     game.feverTimer = CONFIG.feverDuration;
+    game.markSurgeSeen();
     ui.feverStart();
     sfx.feverStart();
     burst(player.position, 0xff88ff, { count: 30, speed: 16, size: 1.3 });

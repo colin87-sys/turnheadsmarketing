@@ -66,7 +66,7 @@ export function createEnvironment(scene) {
         float curtain = smoothstep(0.15, 0.65, h) * (0.5 + 0.5 * sin(time * 0.3));
         vec3 aurora = vec3(0.25, 0.95, 0.85) * max(band1, 0.0)
                     + vec3(0.95, 0.3, 0.95) * max(band2, 0.0);
-        col += aurora * curtain * feverMix * 0.35;
+        col += aurora * curtain * feverMix * 0.5;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -224,7 +224,7 @@ export function updateEnvironment(dt, camera, time, playerDist, feverActive = fa
   sky.material.uniforms.feverMix.value = feverMix;
   sky.material.uniforms.time.value = time;
   snow.material.color.lerpColors(snowBaseColor, snowFeverColor, feverMix);
-  snow.material.opacity = 0.75 + feverMix * 0.2;
+  snow.material.opacity = 0.75 + feverMix * 0.25;
 
   // Extra streaming at speed: flakes drift toward the camera so boosting
   // reads as rushing through the snowfall (cheap speed lines).

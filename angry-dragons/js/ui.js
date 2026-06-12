@@ -24,6 +24,8 @@ const ICONS = {
 // Popup text IDs used across multiple popups
 let popupTimer = null;
 let lastCombo = 1;
+let lastPipKey = '';     // avoid rebuilding surge pips every frame
+let dmInView = true;     // dragon projects inside the viewport
 
 export const ui = {
   init(h = {}) {
@@ -48,6 +50,12 @@ export const ui = {
         <button class="mute-btn" id="music-btn" title="Toggle music">${ICONS.music}</button>
         <button class="mute-btn" id="sfx-btn" title="Toggle sound effects">${ICONS.sfxOn}</button>
       </div>
+      <div class="dragon-meter" id="dragon-meter" data-tier="0">
+        <div class="dm-shock" id="dm-shock"></div>
+        <div class="dm-mult" id="dm-mult">×1.00</div>
+        <div class="dm-pips" id="dm-pips"></div>
+        <div class="dm-label" id="dm-label"></div>
+      </div>
       <div class="popup" id="popup"></div>
       <div class="popup popup2" id="popup2"></div>
       <div class="vignette" id="vignette"></div>
@@ -64,6 +72,11 @@ export const ui = {
       comboX:       root.querySelector('#combo-x'),
       dist:         root.querySelector('#dist'),
       best:         root.querySelector('#best'),
+      dragonMeter:  root.querySelector('#dragon-meter'),
+      dmShock:      root.querySelector('#dm-shock'),
+      dmMult:       root.querySelector('#dm-mult'),
+      dmPips:       root.querySelector('#dm-pips'),
+      dmLabel:      root.querySelector('#dm-label'),
       popup:        root.querySelector('#popup'),
       popup2:       root.querySelector('#popup2'),
       vignette:     root.querySelector('#vignette'),
@@ -108,16 +121,59 @@ export const ui = {
     els.score.dataset.tier = tier;
 
     // Combo: intensity tiers escalate the styling; fever overrides everything
+    const comboRose = game.combo > lastCombo + 0.001;
     els.comboX.textContent = `×${game.combo.toFixed(2)}`;
     els.combo.dataset.tier = tier;
-    if (game.combo > lastCombo + 0.001) restartAnim(els.comboX, 'combo-pop');
+    if (comboRose) restartAnim(els.comboX, 'combo-pop');
     lastCombo = game.combo;
+
+    // Under-dragon multiplier + surge meter: the player watches the dragon,
+    // not the HUD corner, so success feedback lives there.
+    const goal = game.feverGoal;
+    const dmShow = dmInView &&
+      (tier >= 1 || game.feverActive || game.consecutiveRings > 0);
+    els.dragonMeter.classList.toggle('visible', dmShow);
+    els.dragonMeter.dataset.tier = tier;
+    els.dmMult.textContent = `×${game.combo.toFixed(2)}`;
+    if (comboRose) {
+      restartAnim(els.dmMult, 'dm-pop');
+      if (tier >= 4) restartAnim(els.dmShock, 'dm-shock-anim');
+    }
+    const pipKey = game.feverActive
+      ? 'fever'
+      : `${Math.min(game.consecutiveRings, goal)}/${goal}`;
+    if (pipKey !== lastPipKey) {
+      lastPipKey = pipKey;
+      if (game.feverActive) {
+        els.dmPips.innerHTML = '';
+        els.dmLabel.textContent = 'DRAGON SURGE!';
+      } else {
+        const n = Math.min(game.consecutiveRings, goal);
+        els.dmPips.innerHTML = Array.from(
+          { length: goal },
+          (_, i) => `<span class="pip${i < n ? ' on' : ''}"></span>`
+        ).join('');
+        els.dmLabel.textContent = `DRAGON SURGE ${n}/${goal}`;
+      }
+    }
 
     els.dist.textContent  = `${Math.floor(player.dist)} m`;
     els.best.textContent  = game.highScore > 0 ? `BEST ${game.highScore}` : '';
 
     // Fever overlay pulse
     els.feverOverlay.classList.toggle('active', game.feverActive);
+  },
+
+  // Screen-space anchor for the under-dragon meter (set every frame from the
+  // projected dragon position in main.js).
+  setDragonMeterPos(x, y, inView) {
+    dmInView = inView;
+    if (!inView) {
+      els.dragonMeter.classList.remove('visible');
+      return;
+    }
+    els.dragonMeter.style.left = `${x}px`;
+    els.dragonMeter.style.top = `${y}px`;
   },
 
   ringPopup(points, perfect) {
@@ -189,7 +245,7 @@ export const ui = {
         ${game.highScore ? `<p class="sub">Your best: <b>${game.highScore}</b> pts · ${game.bestDistance} m</p>` : ''}
         <ul>
           ${controls}
-          <li><span class="cg">Green rings</span> &amp; <span class="c">crystal windows</span> build your combo. Hit ${CONFIG.feverThreshold} in a row = <span class="cf">DRAGON SURGE</span></li>
+          <li><span class="cg">Green rings</span> &amp; <span class="c">crystal windows</span> build your combo. Hit ${game.feverGoal} in a row = <span class="cf">DRAGON SURGE</span></li>
           <li><span class="c">Blue orbs</span> = free boost · chain rings, windows &amp; orbs to <b>boost forever</b></li>
           <li>Squeeze past obstacles for near-miss bonuses. <b>Side walls end your flight instantly.</b></li>
         </ul>
@@ -239,10 +295,16 @@ export const ui = {
         </div>
         <p class="share-hint" id="share-hint"></p>
         ${isTouch() ? '' : '<p class="action-key">or press R to retry</p>'}`;
+
+    } else if (type === 'paused') {
+      html = `
+        <h1>PAUSED</h1>
+        <p class="action">${isTouch() ? 'TAP TO RESUME' : 'TAP OR PRESS ANY KEY TO RESUME'}</p>`;
     }
 
     els.screen.innerHTML = html;
     els.screen.classList.add('visible');
+    if (els.dragonMeter) els.dragonMeter.classList.remove('visible');
     if (type === 'gameover') wireShareButtons(score, dist);
   },
 

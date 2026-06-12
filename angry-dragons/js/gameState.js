@@ -17,8 +17,12 @@ function save(key, value) {
   try { localStorage.setItem(key, String(value)); } catch {}
 }
 
+function loadFlag(key) {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
 export const game = {
-  state: 'ready', // ready | playing | gameover
+  state: 'ready', // ready | playing | paused | gameover
   score: 0,
   combo: 1,
   maxCombo: 1,
@@ -43,6 +47,19 @@ export const game = {
   isNewHighScore: false,
   isNewBestDistance: false,
   challengeScore: 0,
+  surgeSeen: loadFlag('dragonDriftSurgeSeen'),
+
+  // First-ever Dragon Surge triggers sooner so new players experience the
+  // best audiovisual state early enough to want another run.
+  get feverGoal() {
+    return this.surgeSeen ? CONFIG.feverThreshold : CONFIG.feverThresholdFirst;
+  },
+
+  markSurgeSeen() {
+    if (this.surgeSeen) return;
+    this.surgeSeen = true;
+    try { localStorage.setItem('dragonDriftSurgeSeen', '1'); } catch {}
+  },
 
   reset() {
     this.score = 0;
